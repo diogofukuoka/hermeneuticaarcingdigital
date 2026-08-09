@@ -10,10 +10,10 @@ import { RelationsGuide } from './components/RelationsGuide';
 import { SavedAnalysesModal } from './components/SavedAnalysesModal';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
-import { BookOpen, Save, FolderOpen } from 'lucide-react';
+import { BookOpen, Save, FolderOpen, FilePlus2 } from 'lucide-react';
 import { Stroke, SavedAnalysis } from './types';
 import { db } from './utils/firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 
 export default function App() {
   const [text, setText] = useState('');
@@ -24,36 +24,39 @@ export default function App() {
   const [isSavedModalOpen, setIsSavedModalOpen] = useState(false);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [savedItems, setSavedItems] = useState<SavedAnalysis[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [currentId, setCurrentId] = useState<string | null>(null);
 
-  // Initialize session from URL or create a new one
+  // Sync the list of saved analyses automatically from Firestore
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    let id = params.get('id');
-    if (!id) {
-      id = crypto.randomUUID();
-      window.history.replaceState(null, '', `?id=${id}`);
-    }
-    setSessionId(id);
-    
-    // Load local storage list
-    const saved = localStorage.getItem('hermeneutica_saved_analyses');
-    if (saved) {
-      try {
-        setSavedItems(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse saved items', e);
-      }
-    }
+    const colRef = collection(db, 'analyses');
+    const unsubscribe = onSnapshot(colRef, (snapshot) => {
+      const items: SavedAnalysis[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        items.push({
+          id: docSnap.id,
+          title: data.title || 'Sem título',
+          text: data.text || '',
+          strokes: data.strokes ? JSON.parse(data.strokes) : [],
+          updatedAt: data.updatedAt || 0
+        });
+      });
+      // Sort by recently updated
+      items.sort((a, b) => b.updatedAt - a.updatedAt);
+      setSavedItems(items);
+    }, (error) => {
+      console.error("Error fetching analyses:", error);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Firebase Realtime Sync
+  // Sync current active document if someone else edits it
   useEffect(() => {
-    if (!sessionId) return;
-    const docRef = doc(db, 'analyses', sessionId);
+    if (!currentId) return;
+    const docRef = doc(db, 'analyses', currentId);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.metadata.hasPendingWrites) return; // Ignore our own local updates
-      
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.title !== undefined) setTitle(data.title);
@@ -64,67 +67,87 @@ export default function App() {
         if (data.strokes !== undefined) {
           try {
             setStrokes(JSON.parse(data.strokes));
-          } catch(e) {}
+          } catch (e) {}
         }
       }
     });
     return () => unsubscribe();
-  }, [sessionId]);
+  }, [currentId]);
 
-  const updateRemote = useCallback((updates: Partial<SavedAnalysis>) => {
-    if (!sessionId) return;
-    const docRef = doc(db, 'analyses', sessionId);
+  const updateRemote = useCallback((updates: Partial<SavedAnalysis>, id: string | null = currentId) => {
+    if (!id) return;
+    const docRef = doc(db, 'analyses', id);
     setDoc(docRef, { ...updates, updatedAt: Date.now() }, { merge: true }).catch(console.error);
-  }, [sessionId]);
+  }, [currentId]);
 
   const handleSetText = (val: string) => {
     setText(val);
-    updateRemote({ text: val });
+    if (currentId) updateRemote({ text: val });
   };
 
   const handleSetStrokes = (valOrFn: any) => {
     setStrokes(prev => {
       const nextStrokes = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
-      updateRemote({ strokes: JSON.stringify(nextStrokes) });
+      if (currentId) updateRemote({ strokes: JSON.stringify(nextStrokes) });
       return nextStrokes;
     });
   };
 
-  const saveToLocalStorage = (items: SavedAnalysis[]) => {
-    setSavedItems(items);
-    localStorage.setItem('hermeneutica_saved_analyses', JSON.stringify(items));
-  };
-
   const handleSave = () => {
-    if (!sessionId) return;
+    if (!text.trim() && strokes.length === 0) return;
     
-    const newItem: SavedAnalysis = {
-      id: sessionId,
-      title,
-      updatedAt: Date.now(),
-    };
-
-    const existingIndex = savedItems.findIndex(item => item.id === sessionId);
-    let newItems;
-    if (existingIndex >= 0) {
-      newItems = [...savedItems];
-      newItems[existingIndex] = newItem;
-    } else {
-      newItems = [newItem, ...savedItems];
+    let newTitle = title;
+    if (newTitle === 'Análise sem título' && text.trim()) {
+      newTitle = text.trim().split('\n')[0].substring(0, 50);
+      if (newTitle.length === 50) newTitle += '...';
+      setTitle(newTitle);
     }
+
+    const idToSave = currentId || crypto.randomUUID();
     
-    saveToLocalStorage(newItems);
-    alert('Análise salva na sua lista local! Compartilhe o link para colaborar em tempo real.');
+    // Write to Firestore (creates or updates)
+    const docRef = doc(db, 'analyses', idToSave);
+    setDoc(docRef, {
+      title: newTitle,
+      text: text,
+      strokes: JSON.stringify(strokes),
+      updatedAt: Date.now()
+    }, { merge: true }).then(() => {
+      if (!currentId) {
+        setCurrentId(idToSave);
+        alert('Nova análise salva com sucesso!');
+      }
+    }).catch(console.error);
   };
 
   const handleLoad = (item: SavedAnalysis) => {
-    window.location.href = `?id=${item.id}`;
+    setCurrentId(item.id);
+    setTitle(item.title);
+    setText(item.text || '');
+    setStrokes(item.strokes || []);
+    setPropositions(parseText(item.text || ''));
+    setIsSavedModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta análise da sua lista local?')) {
-      saveToLocalStorage(savedItems.filter(item => item.id !== id));
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir esta análise para todos?')) {
+      try {
+        await deleteDoc(doc(db, 'analyses', id));
+        if (currentId === id) {
+          handleNew();
+        }
+      } catch (err) {
+        console.error("Failed to delete", err);
+      }
     }
+  };
+
+  const handleNew = () => {
+    setCurrentId(null);
+    setTitle('Análise sem título');
+    setText('');
+    setStrokes([]);
+    setPropositions([]);
   };
 
   const handleAnalyze = async () => {
@@ -139,21 +162,19 @@ export default function App() {
         newTitle = text.trim();
         setTitle(newTitle);
         textToParse = fetchedText;
-        handleSetText(fetchedText);
+        setText(fetchedText); // Set without triggering immediate auto-save
+        if (currentId) updateRemote({ text: fetchedText, title: newTitle });
       }
     } else if (text.trim().length > 0 && title === 'Análise sem título') {
       newTitle = text.trim().split('\n')[0].substring(0, 50);
       if (newTitle.length === 50) newTitle += '...';
       setTitle(newTitle);
+      if (currentId) updateRemote({ title: newTitle });
     }
     
     const parsed = parseText(textToParse);
     setPropositions(parsed);
     setIsAnalyzing(false);
-    
-    if (newTitle !== title) {
-       updateRemote({ title: newTitle });
-    }
   };
 
   return (
@@ -163,29 +184,37 @@ export default function App() {
           <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white">
             <span className="font-bold text-sm italic">A</span>
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-slate-800 uppercase text-xs">
+          <h1 className="text-lg font-semibold tracking-tight text-slate-800 uppercase text-xs hidden md:block">
             Hermenêutica Digital <span className="font-light opacity-50 ml-2">| Método Arcing</span>
           </h1>
           {title !== 'Análise sem título' && (
-             <span className="ml-4 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded">
+             <span className="md:ml-4 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded max-w-[200px] truncate">
                {title}
              </span>
           )}
         </div>
         <div className="flex gap-2">
           <button 
+            onClick={handleNew}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
+            title="Nova Análise"
+          >
+            <FilePlus2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Nova</span>
+          </button>
+          <button 
             onClick={handleSave}
             className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors shadow-sm"
           >
             <Save className="w-4 h-4" />
-            <span className="hidden sm:inline">Salvar Local</span>
+            <span className="hidden sm:inline">{currentId ? 'Salvo Auto' : 'Salvar Nuvem'}</span>
           </button>
           <button 
             onClick={() => setIsSavedModalOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
           >
             <FolderOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">Salvos</span>
+            <span className="hidden sm:inline">Salvos ({savedItems.length})</span>
           </button>
           <div className="w-px h-6 bg-slate-200 mx-1 self-center"></div>
           <button 
@@ -220,12 +249,12 @@ export default function App() {
       <footer className="h-8 bg-slate-900 flex items-center justify-between px-6 text-[10px] text-slate-400 shrink-0 hidden sm:flex z-50">
         <div className="flex gap-4">
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Sincronização em Tempo Real ({sessionId})
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Nuvem Sincronizada Automática
           </span>
-          <span>Resolução do Canvas: Automática</span>
+          <span>{currentId ? 'Editando análise salva' : 'Rascunho local'}</span>
         </div>
         <div className="flex gap-4">
-          <span className="font-mono">UTC-3 | PROD_v1.0.5</span>
+          <span className="font-mono">UTC-3 | PROD_v1.0.6</span>
         </div>
       </footer>
       
