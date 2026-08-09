@@ -217,8 +217,8 @@ export function CanvasPanel() {
         />
       </div>
 
-      <div className="sticky bottom-6 w-full flex justify-end px-6 pb-6 pointer-events-none z-20 h-0">
-        <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-full shadow-lg border border-slate-200 flex flex-col gap-2 pointer-events-auto -translate-y-full">
+      <div className="absolute bottom-6 right-6 z-20 pointer-events-auto">
+        <div className="bg-white/90 backdrop-blur-md p-1.5 rounded-full shadow-xl border border-slate-200 flex flex-col gap-2">
           <button 
             onClick={handleUndo} 
             disabled={strokes.length === 0} 

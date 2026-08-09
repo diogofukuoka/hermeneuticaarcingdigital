@@ -59,8 +59,8 @@ export default function App() {
 
       <main className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
-          <div className="flex md:flex-row flex-col relative w-full items-stretch min-h-full">
-            <section className="w-full md:w-1/2 border-r bg-white flex flex-col shrink-0">
+          <div className="flex sm:flex-row flex-col relative w-full items-stretch min-h-full">
+            <section className="w-full sm:w-1/2 border-r bg-white flex flex-col shrink-0">
               <TextPanel
                 text={text}
                 setText={setText}
@@ -69,14 +69,14 @@ export default function App() {
                 isAnalyzing={isAnalyzing}
               />
             </section>
-            <section className="w-full md:w-1/2 bg-white flex flex-col relative shrink-0">
+            <section className="w-full sm:w-1/2 bg-white flex flex-col relative shrink-0">
               <CanvasPanel />
             </section>
           </div>
         </div>
       </main>
 
-      <footer className="h-8 bg-slate-900 flex items-center justify-between px-6 text-[10px] text-slate-400 shrink-0 hidden md:flex z-50">
+      <footer className="h-8 bg-slate-900 flex items-center justify-between px-6 text-[10px] text-slate-400 shrink-0 hidden sm:flex z-50">
         <div className="flex gap-4">
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Stylus Conectado (S-Pen)
