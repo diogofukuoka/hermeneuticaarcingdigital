@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html style="height: 100%;">
+<head>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full flex flex-col">
+  <div class="flex-1 overflow-y-auto flex">
+    <div class="w-1/2 bg-red-100 flex flex-col">
+      <div class="h-[2000px] bg-red-200">Tall text</div>
+    </div>
+    <div class="w-1/2 bg-blue-100 flex flex-col">
+      <div class="h-full bg-blue-200" id="canvas-container">Canvas</div>
+    </div>
+  </div>
+  <script>
+    setTimeout(() => {
+      console.log(document.getElementById('canvas-container').getBoundingClientRect().height);
+    }, 100);
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "Arcing Studio",
+  "description": "Ferramenta de análise de discurso e hermenêutica bíblica (Método Arcing) com suporte a stylus e quadro de desenho livre.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
