@@ -19,6 +19,12 @@ export function CanvasPanel() {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
   
+  const strokesRef = useRef<Stroke[]>([]);
+  const currentStrokeRef = useRef<Stroke | null>(null);
+
+  useEffect(() => { strokesRef.current = strokes; }, [strokes]);
+  useEffect(() => { currentStrokeRef.current = currentStroke; }, [currentStroke]);
+  
   const [color, setColor] = useState<string>('#0f172a');
   const [lineWidth, setLineWidth] = useState<number>(2);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -109,9 +115,9 @@ export function CanvasPanel() {
       ctx.stroke();
     };
 
-    strokes.forEach(drawStroke);
-    if (currentStroke) {
-      drawStroke(currentStroke);
+    strokesRef.current.forEach(drawStroke);
+    if (currentStrokeRef.current) {
+      drawStroke(currentStrokeRef.current);
     }
   };
 
@@ -217,7 +223,7 @@ export function CanvasPanel() {
         />
       </div>
 
-      <div className="absolute bottom-6 right-6 z-20 pointer-events-auto">
+      <div className="fixed bottom-6 right-6 sm:bottom-12 z-[60] pointer-events-auto">
         <div className="bg-white/90 backdrop-blur-md p-1.5 rounded-full shadow-xl border border-slate-200 flex flex-col gap-2">
           <button 
             onClick={handleUndo} 
