@@ -1,0 +1,21 @@
+{
+  "schema": [
+    {
+      "collection": "analyses",
+      "description": "Saved analyses",
+      "fields": [
+        { "name": "title", "type": "string", "description": "Reference title" },
+        { "name": "text", "type": "string", "description": "Biblical text" },
+        { "name": "strokes", "type": "string", "description": "JSON string of canvas strokes" },
+        { "name": "updatedAt", "type": "number", "description": "Timestamp of last update" }
+      ],
+      "rules": [
+        {
+          "allow": "read, write",
+          "condition": "true",
+          "description": "Public access for shared links"
+        }
+      ]
+    }
+  ]
+}

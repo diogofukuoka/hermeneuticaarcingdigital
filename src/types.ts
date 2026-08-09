@@ -13,7 +13,7 @@ export interface Stroke {
 export interface SavedAnalysis {
   id: string;
   title: string;
-  text: string;
-  strokes: Stroke[];
+  text?: string;
+  strokes?: Stroke[];
   updatedAt: number;
 }
