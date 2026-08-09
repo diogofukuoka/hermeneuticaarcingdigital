@@ -6,13 +6,16 @@
 import React, { useState } from 'react';
 import { TextPanel } from './components/TextPanel';
 import { CanvasPanel } from './components/CanvasPanel';
+import { RelationsGuide } from './components/RelationsGuide';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
+import { BookOpen } from 'lucide-react';
 
 export default function App() {
   const [text, setText] = useState('');
   const [propositions, setPropositions] = useState<Proposition[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
@@ -44,6 +47,13 @@ export default function App() {
           </h1>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={() => setIsGuideOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span className="hidden sm:inline">Guia de Relações</span>
+          </button>
         </div>
       </header>
 
@@ -77,6 +87,8 @@ export default function App() {
           <span className="font-mono">UTC-3 | PROD_v1.0.4</span>
         </div>
       </footer>
+      
+      <RelationsGuide isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 }
