@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Proposition } from '../utils/parser';
-import { passages } from '../utils/passages';
 import { ChevronDown, Trash2 } from 'lucide-react';
 
 interface TextPanelProps {
@@ -14,28 +13,12 @@ interface TextPanelProps {
 export function TextPanel({ text, setText, propositions, onAnalyze, isAnalyzing }: TextPanelProps) {
   const [activePopup, setActivePopup] = useState<string | null>(null);
 
-  const handlePreload = (passageName: string) => {
-    setText(passages[passageName]);
-    setTimeout(onAnalyze, 50);
-  };
-
   return (
     <div className="flex flex-col flex-1 bg-white relative min-h-full">
       <div className="sticky top-0 z-40 flex flex-col shadow-sm">
         <div className="p-4 border-b bg-slate-50/90 flex flex-col gap-3 shrink-0 backdrop-blur">
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Entrada de Texto</span>
-            <div className="flex gap-2">
-              {Object.keys(passages).map(passage => (
-                <button
-                  key={passage}
-                  onClick={() => handlePreload(passage)}
-                  className="text-[10px] font-bold px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-full transition-colors"
-                >
-                  {passage}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="flex gap-2">
             <textarea

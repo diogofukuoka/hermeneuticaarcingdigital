@@ -1,22 +1,15 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Undo2, Trash2, Pen } from 'lucide-react';
+import { Stroke } from '../types';
 
-interface Point {
-  x: number;
-  y: number;
-  pressure: number;
+interface CanvasPanelProps {
+  strokes: Stroke[];
+  setStrokes: React.Dispatch<React.SetStateAction<Stroke[]>>;
 }
 
-interface Stroke {
-  points: Point[];
-  color: string;
-  width: number;
-}
-
-export function CanvasPanel() {
+export function CanvasPanel({ strokes, setStrokes }: CanvasPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
   
   const strokesRef = useRef<Stroke[]>([]);
