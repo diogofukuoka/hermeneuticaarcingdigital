@@ -14,53 +14,91 @@ export function parseText(text: string): Proposition[] {
   let cleaned = text.trim();
   if (!cleaned) return [];
 
-  // Split by major punctuation and newlines. 
-  // (?<=[.;:?])\s+ splits after punctuation followed by space.
-  let rawSegments = cleaned.split(/(?<=[.;:?])\s+|\n+/);
-  
   let propositions: Proposition[] = [];
+  
+  const hasManualBreaks = cleaned.includes('\n');
+
+  if (hasManualBreaks) {
+    let lines = cleaned.split('\n');
+    let currentVerse = 1;
+    let subCounter = 0;
+    let currentVerseStr = "";
+    
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let propText = line.trim();
+      
+      if (/^\[?\(?\d+\]?\)?\.?$/.test(propText)) {
+         currentVerseStr = propText + " ";
+         continue;
+      }
+      
+      if (currentVerseStr) {
+         propText = currentVerseStr + propText;
+         currentVerseStr = "";
+      }
+      
+      const verseMatch = propText.match(/^\[?\(?(\d+)\]?\)?[\s.]+(.*)/);
+      if (verseMatch) {
+        currentVerse = parseInt(verseMatch[1], 10);
+        propText = verseMatch[2];
+        subCounter = 0;
+      }
+
+      addProposition(propositions, propText, currentVerse, subCounter);
+      subCounter++;
+    }
+    return propositions;
+  }
+
+  let autoText = cleaned;
+  
+  autoText = autoText.replace(/([.;:?])\s+/g, '$1\n');
+  
+  const afterCommaConnectives = sortedConnectives.map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const commaRegex = new RegExp(`(,\\s+)(?=${afterCommaConnectives}\\b)`, 'gi');
+  autoText = autoText.replace(commaRegex, ',\n');
+  
+  const strongConnectives = [
+    "para que", "a fim de que", "de modo que", "de forma que", 
+    "porque", "pois", "portanto", "por isso", 
+    "mas", "porém", "contudo", "todavia"
+  ];
+  const strongRegex = new RegExp(`\\s+(?=${strongConnectives.join('|')}\\b)`, 'gi');
+  autoText = autoText.replace(strongRegex, '\n');
+  
+  autoText = autoText.replace(/(\b(?:maneira|tal|tanto)\b.*?)\s+(que\b)/gi, '$1\n$2');
+
+  let lines = autoText.split('\n');
   let verseCounter = 1;
   let subCounter = 0;
+  let currentVerseStr = "";
 
-  for (const segment of rawSegments) {
-    if (!segment.trim()) continue;
-    
-    // Split by commas to check if parts start with connectives
-    let parts = segment.split(/(?<=,)\s+/);
-    
-    let currentPropText = parts[0];
-    
-    for (let i = 1; i < parts.length; i++) {
-      let part = parts[i];
-      let hasConnective = false;
+  for (const line of lines) {
+      if (!line.trim()) continue;
+      let propText = line.trim();
       
-      let lowerPart = part.toLowerCase();
-      for (const conn of sortedConnectives) {
-        // Must match word boundary to avoid partial word matches
-        // For special characters like "?", word boundary \b doesn't work, so handle carefully.
-        const escapedConn = conn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp('^(' + escapedConn + ')(?:\\b|\\s|[,.;:?!]|$)', 'i');
-        
-        if (regex.test(lowerPart)) {
-          hasConnective = true;
-          break;
-        }
+      if (/^\[?\(?\d+\]?\)?\.?$/.test(propText)) {
+         currentVerseStr = propText + " ";
+         continue;
       }
       
-      if (hasConnective) {
-        addProposition(propositions, currentPropText, verseCounter, subCounter);
-        subCounter++;
-        currentPropText = part;
-      } else {
-        currentPropText += ' ' + part;
+      if (currentVerseStr) {
+         propText = currentVerseStr + propText;
+         currentVerseStr = "";
       }
-    }
-    
-    addProposition(propositions, currentPropText, verseCounter, subCounter);
-    verseCounter++;
-    subCounter = 0;
+      
+      const verseMatch = propText.match(/^\[?\(?(\d+)\]?\)?[\s.]+(.*)/);
+      if (verseMatch) {
+        verseCounter = parseInt(verseMatch[1], 10);
+        propText = verseMatch[2];
+        subCounter = 0;
+      }
+
+      addProposition(propositions, propText, verseCounter, subCounter);
+      subCounter++;
   }
-  
+
   return propositions;
 }
 

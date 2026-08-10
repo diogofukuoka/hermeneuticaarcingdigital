@@ -21,16 +21,19 @@ export function TextPanel({ text, setText, propositions, onAnalyze, isAnalyzing 
             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Entrada de Texto</span>
           </div>
           <div className="flex gap-2">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Cole o texto bíblico ou digite uma referência (ex: Pv 16:3)..."
-              className="flex-1 h-14 p-2 text-sm border rounded bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none text-slate-700 leading-relaxed shadow-sm"
-            />
+            <div className="flex-1 flex flex-col gap-1">
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Cole o texto bíblico ou digite uma referência (ex: Jo 3:16)..."
+                className="w-full h-14 p-2 text-sm border rounded bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none text-slate-700 leading-relaxed shadow-sm"
+              />
+              <span className="text-[10px] text-slate-400 px-1">Dica: Use "Enter" (quebra de linha) para separar proposições manualmente.</span>
+            </div>
             {text && (
               <button
                 onClick={() => setText('')}
-                className="bg-white border border-slate-200 text-slate-500 px-3 py-2 rounded hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors shrink-0 flex items-center justify-center shadow-sm"
+                className="bg-white border border-slate-200 text-slate-500 px-3 py-2 h-14 rounded hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors shrink-0 flex items-center justify-center shadow-sm"
                 title="Limpar Texto"
               >
                 <Trash2 className="w-4 h-4" />
@@ -39,7 +42,7 @@ export function TextPanel({ text, setText, propositions, onAnalyze, isAnalyzing 
             <button
               onClick={onAnalyze}
               disabled={isAnalyzing}
-              className="bg-indigo-600 text-white px-4 py-2 text-sm rounded font-medium hover:bg-indigo-700 disabled:bg-indigo-400 transition-colors shrink-0 flex items-center justify-center shadow-sm"
+              className="bg-indigo-600 text-white px-4 py-2 h-14 text-sm rounded font-medium hover:bg-indigo-700 disabled:bg-indigo-400 transition-colors shrink-0 flex items-center justify-center shadow-sm"
             >
               {isAnalyzing ? 'Buscando...' : 'Analisar'}
             </button>
