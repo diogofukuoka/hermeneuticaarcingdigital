@@ -6,6 +6,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { TextPanel } from './components/TextPanel';
 import { CanvasPanel } from './components/CanvasPanel';
+import { AITreePanel } from './components/AITreePanel';
+import { ArcNode } from './types';
 import { RelationsGuide } from './components/RelationsGuide';
 import { SavedAnalysesModal } from './components/SavedAnalysesModal';
 import { Proposition, parseText } from './utils/parser';
@@ -25,6 +27,8 @@ export default function App() {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [savedItems, setSavedItems] = useState<SavedAnalysis[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [arcTree, setArcTree] = useState<ArcNode | null>(null);
+  const [showAIPanel, setShowAIPanel] = useState(false);
 
   // Sync the list of saved analyses automatically from Firestore
   useEffect(() => {
@@ -111,6 +115,7 @@ export default function App() {
       title: newTitle,
       text: text,
       strokes: JSON.stringify(strokes),
+      arcTree: arcTree ? JSON.stringify(arcTree) : null,
       updatedAt: Date.now()
     }, { merge: true }).then(() => {
       if (!currentId) {
@@ -125,6 +130,15 @@ export default function App() {
     setTitle(item.title);
     setText(item.text || '');
     setStrokes(item.strokes || []);
+    if ((item as any).arcTree) {
+      try {
+        setArcTree(JSON.parse((item as any).arcTree));
+        setShowAIPanel(true);
+      } catch(e) {}
+    } else {
+      setArcTree(null);
+      setShowAIPanel(false);
+    }
     setPropositions(parseText(item.text || ''));
     setIsSavedModalOpen(false);
   };
@@ -148,9 +162,11 @@ export default function App() {
     setText('');
     setStrokes([]);
     setPropositions([]);
+    setArcTree(null);
+    setShowAIPanel(false);
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (useAI: boolean = false) => {
     setIsAnalyzing(true);
     let textToParse = text;
     let newTitle = title;
@@ -174,13 +190,23 @@ export default function App() {
     
     let parsed: Proposition[] = [];
     try {
-      const response = await fetch('/api/parse', {
+      const response = await fetch(useAI ? '/api/parse' : '/api/parse', { // Assuming useAI changes behavior if needed, currently both hit /api/parse which returns propositions and tree
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textToParse })
       });
       if (response.ok) {
-        parsed = await response.json();
+        const data = await response.json();
+        // Check if data is array (old format) or object (new format)
+        if (Array.isArray(data)) {
+           parsed = data;
+        } else if (data.propositions) {
+           parsed = data.propositions;
+           if (useAI && data.tree) {
+             setArcTree(data.tree);
+             setShowAIPanel(true);
+           }
+        }
       } else {
         throw new Error("API parsing failed");
       }
@@ -255,7 +281,11 @@ export default function App() {
               />
             </section>
             <section className="w-full sm:w-1/2 bg-white flex flex-col relative shrink-0">
-              <CanvasPanel strokes={strokes} setStrokes={handleSetStrokes} />
+              {showAIPanel && arcTree ? (
+                <AITreePanel tree={arcTree} onClose={() => setShowAIPanel(false)} />
+              ) : (
+                <CanvasPanel strokes={strokes} setStrokes={handleSetStrokes} />
+              )}
             </section>
           </div>
         </div>

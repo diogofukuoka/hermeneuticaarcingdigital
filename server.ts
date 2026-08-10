@@ -32,33 +32,46 @@ Este é o núcleo do seu comportamento. Você deve rastrear conectivos e conjun�
 - Asíndeto (Conectivos Ocultos): Se não houver conectivo físico expresso na frase, analise a relação conceitual de coesão e proponha uma "Conjunção de Teste" artificial entre colchetes para expor a lógica implícita (ex: [porque], [portanto]).
 
 Saída esperada:
-Responda APENAS com um array JSON estrito no seguinte formato:
-[
-  {
-    "id": "16a",
-    "text": "Porque Deus amou o mundo de tal maneira",
-    "originalText": "Porque Deus amou o mundo de tal maneira",
-    "connectiveMatch": { "word": "Porque", "relations": [{"id": "G", "category": "Subord. Declaração Distinta", "name": "Base / Fundamento / Causa", "testConjunction": "porque"}] }
-  },
-  {
-    "id": "16b",
-    "text": "que deu o seu Filho unigênito,",
-    "originalText": "que deu o seu Filho unigênito,",
-    "connectiveMatch": { "word": "que", "relations": [{"id": "Ac/Res", "category": "Subord. Declaração Distinta", "name": "Ação-Resultado", "testConjunction": "de modo que"}] }
-  },
-  {
-    "id": "16c",
-    "text": "para que todo o que nele crê não pereça,",
-    "originalText": "para que todo o que nele crê não pereça,",
-    "connectiveMatch": { "word": "para que", "relations": [{"id": "Ac/Pur", "category": "Subord. Declaração Distinta", "name": "Ação-Propósito", "testConjunction": "para que / a fim de que"}] }
-  },
-  {
-    "id": "16d",
-    "text": "mas tenha a vida eterna.",
-    "originalText": "mas tenha a vida eterna.",
-    "connectiveMatch": { "word": "mas", "relations": [{"id": "A", "category": "Coordenadas", "name": "Alternativa", "testConjunction": "ou"}] }
+Responda APENAS com um objeto JSON estrito no seguinte formato:
+{
+  "propositions": [
+    {
+      "id": "16a",
+      "text": "Porque Deus amou o mundo de tal maneira",
+      "originalText": "Porque Deus amou o mundo de tal maneira",
+      "connectiveMatch": { "word": "Porque", "relations": [{"id": "G", "category": "Subord. Declaração Distinta", "name": "Base / Fundamento / Causa", "testConjunction": "porque"}] }
+    }
+    // ... outras proposições
+  ],
+  "tree": {
+    "type": "relation",
+    "relationId": "G",
+    "relationName": "Base / Fundamento / Causa",
+    "mainIndex": 0,
+    "children": [
+      {
+        "type": "proposition",
+        "id": "16a",
+        "text": "Porque Deus amou o mundo de tal maneira"
+      },
+      {
+        "type": "relation",
+        "relationId": "Ac/Res",
+        "relationName": "Ação-Resultado",
+        "mainIndex": 0,
+        "children": [
+          {
+            "type": "proposition",
+            "id": "16b",
+            "text": "que deu o seu Filho unigênito,"
+          }
+        ]
+      }
+    ]
   }
-]
+}
+
+Para a árvore (tree), você DEVE agrupar as proposições hierarquicamente. Use "type": "relation" para nós que agrupam, informando "relationId" e "relationName". O "mainIndex" (0 ou 1, ou mais) indica qual dos filhos é a ideia principal (se for uma relação subordinada, aponta para a principal; se for coordenada, pode ser null ou não aplicável, mas geralmente as coordenadas têm peso igual). O array "children" contém as proposições ou outras relações filhas. Use "type": "proposition" para as folhas da árvore, informando "id" e "text".
 
 Atenção: O campo relations deve conter os objetos exatos de relação (apenas id, category, name e testConjunction) correspondentes à conjunção encontrada, de acordo com as seguintes relações oficiais do método:
 

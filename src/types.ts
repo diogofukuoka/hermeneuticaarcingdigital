@@ -10,6 +10,16 @@ export interface Stroke {
   width: number;
 }
 
+export interface ArcNode {
+  type: 'proposition' | 'relation';
+  id?: string;
+  text?: string;
+  relationId?: string;
+  relationName?: string;
+  mainIndex?: number;
+  children?: ArcNode[];
+}
+
 export interface SavedAnalysis {
   id: string;
   title: string;

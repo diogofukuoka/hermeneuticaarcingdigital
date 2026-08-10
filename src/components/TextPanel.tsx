@@ -6,7 +6,7 @@ interface TextPanelProps {
   text: string;
   setText: (text: string) => void;
   propositions: Proposition[];
-  onAnalyze: () => void;
+  onAnalyze: (useAI?: boolean) => void;
   isAnalyzing: boolean;
 }
 
@@ -40,12 +40,21 @@ export function TextPanel({ text, setText, propositions, onAnalyze, isAnalyzing 
               </button>
             )}
             <button
-              onClick={onAnalyze}
+              onClick={() => onAnalyze(false)}
               disabled={isAnalyzing}
-              className="bg-indigo-600 text-white px-4 py-2 h-14 text-sm rounded font-medium hover:bg-indigo-700 disabled:bg-indigo-400 transition-colors shrink-0 flex items-center justify-center shadow-sm"
+              className="bg-slate-100 text-slate-700 border border-slate-200 px-4 py-2 h-14 text-sm rounded font-medium hover:bg-slate-200 disabled:bg-slate-50 transition-colors shrink-0 flex items-center justify-center shadow-sm"
             >
-              {isAnalyzing ? 'Buscando...' : 'Analisar'}
+              Analisar
             </button>
+            {text.trim().length > 0 && text.trim().length < 50 && (
+              <button
+                onClick={() => onAnalyze(true)}
+                disabled={isAnalyzing}
+                className="bg-indigo-600 text-white px-4 py-2 h-14 text-sm rounded font-medium hover:bg-indigo-700 disabled:bg-indigo-400 transition-colors shrink-0 flex items-center justify-center shadow-sm"
+              >
+                {isAnalyzing ? 'Buscando...' : '✨ Analisar com IA'}
+              </button>
+            )}
           </div>
         </div>
 
