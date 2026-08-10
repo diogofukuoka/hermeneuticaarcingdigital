@@ -4,16 +4,14 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { TextPanel } from './components/TextPanel';
-import { CanvasPanel } from './components/CanvasPanel';
-import { AITreePanel } from './components/AITreePanel';
-import { ArcNode } from './types';
+import { ArcingBoard } from './components/ArcingBoard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { RelationsGuide } from './components/RelationsGuide';
 import { SavedAnalysesModal } from './components/SavedAnalysesModal';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
 import { BookOpen, Save, FolderOpen, FilePlus2 } from 'lucide-react';
-import { Stroke, SavedAnalysis } from './types';
+import { SavedAnalysis, ArcNodeData } from './types';
 import { db } from './utils/firebase';
 import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 
@@ -24,11 +22,9 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isSavedModalOpen, setIsSavedModalOpen] = useState(false);
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [arcNodes, setArcNodes] = useState<ArcNodeData[]>([]);
   const [savedItems, setSavedItems] = useState<SavedAnalysis[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
-  const [arcTree, setArcTree] = useState<ArcNode | null>(null);
-  const [showAIPanel, setShowAIPanel] = useState(false);
 
   // Sync the list of saved analyses automatically from Firestore
   useEffect(() => {
@@ -41,7 +37,8 @@ export default function App() {
           id: docSnap.id,
           title: data.title || 'Sem título',
           text: data.text || '',
-          strokes: data.strokes ? JSON.parse(data.strokes) : [],
+          propositions: data.propositions ? JSON.parse(data.propositions) : undefined,
+          arcNodes: data.arcNodes ? JSON.parse(data.arcNodes) : undefined,
           updatedAt: data.updatedAt || 0
         });
       });
@@ -66,11 +63,17 @@ export default function App() {
         if (data.title !== undefined) setTitle(data.title);
         if (data.text !== undefined) {
           setText(data.text);
+        }
+        if (data.propositions !== undefined) {
+          try {
+            setPropositions(JSON.parse(data.propositions));
+          } catch (e) {}
+        } else if (data.text !== undefined) {
           setPropositions(parseText(data.text));
         }
-        if (data.strokes !== undefined) {
+        if (data.arcNodes !== undefined) {
           try {
-            setStrokes(JSON.parse(data.strokes));
+            setArcNodes(JSON.parse(data.arcNodes));
           } catch (e) {}
         }
       }
@@ -89,16 +92,16 @@ export default function App() {
     if (currentId) updateRemote({ text: val });
   };
 
-  const handleSetStrokes = (valOrFn: any) => {
-    setStrokes(prev => {
-      const nextStrokes = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
-      if (currentId) updateRemote({ strokes: JSON.stringify(nextStrokes) });
-      return nextStrokes;
+  const handleSetArcNodes = (valOrFn: any) => {
+    setArcNodes(prev => {
+      const nextNodes = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      if (currentId) updateRemote({ arcNodes: JSON.stringify(nextNodes) } as any);
+      return nextNodes;
     });
   };
 
   const handleSave = () => {
-    if (!text.trim() && strokes.length === 0) return;
+    if (!text.trim() && arcNodes.length === 0) return;
     
     let newTitle = title;
     if (newTitle === 'Análise sem título' && text.trim()) {
@@ -114,8 +117,8 @@ export default function App() {
     setDoc(docRef, {
       title: newTitle,
       text: text,
-      strokes: JSON.stringify(strokes),
-      arcTree: arcTree ? JSON.stringify(arcTree) : null,
+      propositions: JSON.stringify(propositions),
+      arcNodes: JSON.stringify(arcNodes),
       updatedAt: Date.now()
     }, { merge: true }).then(() => {
       if (!currentId) {
@@ -129,30 +132,22 @@ export default function App() {
     setCurrentId(item.id);
     setTitle(item.title);
     setText(item.text || '');
-    setStrokes(item.strokes || []);
-    if ((item as any).arcTree) {
-      try {
-        setArcTree(JSON.parse((item as any).arcTree));
-        setShowAIPanel(true);
-      } catch(e) {}
-    } else {
-      setArcTree(null);
-      setShowAIPanel(false);
-    }
-    setPropositions(parseText(item.text || ''));
+    setArcNodes(item.arcNodes || []);
+    setPropositions(item.propositions || parseText(item.text || ''));
     setIsSavedModalOpen(false);
+    setTimeout(() => {
+      document.getElementById('board-section')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta análise para todos?')) {
-      try {
-        await deleteDoc(doc(db, 'analyses', id));
-        if (currentId === id) {
-          handleNew();
-        }
-      } catch (err) {
-        console.error("Failed to delete", err);
+    try {
+      await deleteDoc(doc(db, 'analyses', id));
+      if (currentId === id) {
+        handleNew();
       }
+    } catch (err) {
+      console.error("Failed to delete", err);
     }
   };
 
@@ -160,13 +155,11 @@ export default function App() {
     setCurrentId(null);
     setTitle('Análise sem título');
     setText('');
-    setStrokes([]);
+    setArcNodes([]);
     setPropositions([]);
-    setArcTree(null);
-    setShowAIPanel(false);
   };
 
-  const handleAnalyze = async (useAI: boolean = false) => {
+  const handleAnalyze = async () => {
     setIsAnalyzing(true);
     let textToParse = text;
     let newTitle = title;
@@ -189,38 +182,26 @@ export default function App() {
     }
     
     let parsed: Proposition[] = [];
-    if (useAI) {
-      try {
-        const response = await fetch('/api/parse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: textToParse })
-        });
-        if (response.ok) {
-          const data = await response.json();
-          // Check if data is array (old format) or object (new format)
-          if (Array.isArray(data)) {
-             parsed = data;
-          } else if (data.propositions) {
-             parsed = data.propositions;
-             if (data.tree) {
-               setArcTree(data.tree);
-               setShowAIPanel(true);
-             }
-          }
-        } else {
-          throw new Error("API parsing failed");
-        }
-      } catch (e) {
-        console.warn("Falling back to local parsing:", e);
-        parsed = parseText(textToParse);
+    try {
+      const response = await fetch('/api/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToParse })
+      });
+      if (response.ok) {
+        parsed = await response.json();
+      } else if (response.status === 429) {
+        alert("O limite de uso gratuito da API Gemini foi atingido. O aplicativo fará o parse localmente, o que pode ser menos preciso.");
+        throw new Error("Quota exceeded");
+      } else {
+        throw new Error("API parsing failed");
       }
-    } else {
+    } catch (e) {
+      console.warn("Falling back to local parsing:", e);
       parsed = parseText(textToParse);
-      setShowAIPanel(false);
     }
-    
     setPropositions(parsed);
+    if (currentId) updateRemote({ text: textToParse, propositions: JSON.stringify(parsed) as any, title: newTitle });
     setIsAnalyzing(false);
   };
 
@@ -274,26 +255,41 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex sm:flex-row flex-col relative w-full items-stretch min-h-full">
-            <section className="w-full sm:w-1/2 border-r bg-white flex flex-col shrink-0">
-              <TextPanel
-                text={text}
-                setText={handleSetText}
-                propositions={propositions}
-                onAnalyze={handleAnalyze}
-                isAnalyzing={isAnalyzing}
-              />
-            </section>
-            <section className="w-full sm:w-1/2 bg-white flex flex-col relative shrink-0">
-              {showAIPanel && arcTree ? (
-                <AITreePanel tree={arcTree} onClose={() => setShowAIPanel(false)} />
-              ) : (
-                <CanvasPanel strokes={strokes} setStrokes={handleSetStrokes} />
-              )}
-            </section>
+      <main className="flex flex-col flex-1 overflow-hidden">
+        {/* Text Input Section */}
+        <div className="bg-white border-b px-6 py-4 flex flex-col sm:flex-row gap-4 shrink-0 shadow-sm z-10">
+          <div className="flex-1">
+            <textarea
+              value={text}
+              onChange={(e) => handleSetText(e.target.value)}
+              placeholder="Cole o texto bíblico ou digite uma referência (ex: Jo 3:16) e pressione Enter para quebrar linhas manualmente..."
+              className="w-full h-16 p-3 text-sm border border-slate-200 rounded-lg bg-slate-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none text-slate-700 leading-relaxed shadow-inner transition-all"
+            />
           </div>
+          <div className="flex sm:flex-col gap-2 shrink-0 justify-center">
+            <button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing || !text.trim()}
+              className="bg-indigo-600 text-white px-6 py-2 text-sm rounded-lg font-medium hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center h-10"
+            >
+              {isAnalyzing ? 'Analisando...' : 'Analisar Texto'}
+            </button>
+            {text && (
+              <button
+                onClick={() => handleSetText('')}
+                className="bg-white border border-slate-200 text-slate-600 px-6 py-2 text-sm rounded-lg font-medium hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center h-10"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Board Section */}
+        <div id="board-section" className="flex-1 overflow-y-auto bg-slate-50 relative">
+          <ErrorBoundary>
+            <ArcingBoard propositions={propositions} nodes={arcNodes} setNodes={handleSetArcNodes} />
+          </ErrorBoundary>
         </div>
       </main>
 

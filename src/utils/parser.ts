@@ -4,8 +4,10 @@ export interface Proposition {
   id: string;
   text: string;
   originalText: string;
+  hint?: string;
   connectiveMatch?: {
     word: string;
+    index: number;
     relations: Relation[];
   };
 }
@@ -110,24 +112,33 @@ function addProposition(propositions: Proposition[], text: string, vCount: numbe
   
   for (const conn of sortedConnectives) {
     const escapedConn = conn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp('^(' + escapedConn + ')(?:\\b|\\s|[,.;:?!]|$)', 'i');
+    const regex = new RegExp('(^|\\s|\\b(?<!-))(' + escapedConn + ')(?!-)(?:\\b|\\s|[,.;:?!]|$)', 'i');
     const match = lowerText.match(regex);
     
     if (match) {
-      const matchLen = match[1].length;
+      const matchIndex = match.index! + match[1].length;
+      const matchWord = match[2];
       let relations = connectiveMap.get(conn)!;
       connMatch = {
-        word: cleanText.substring(0, matchLen),
+        word: cleanText.substring(matchIndex, matchIndex + matchWord.length),
+        index: matchIndex,
         relations
       };
       break;
     }
   }
   
+  let hint = undefined;
+  if (connMatch && connMatch.relations.length > 0) {
+    const rel = connMatch.relations[0];
+    hint = `Dica (Local): A palavra '${connMatch.word}' geralmente introduz a relação de ${rel.name}.`;
+  }
+  
   propositions.push({
     id,
     text: cleanText,
     originalText: cleanText,
+    hint,
     connectiveMatch: connMatch
   });
 }

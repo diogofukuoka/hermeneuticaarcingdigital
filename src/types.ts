@@ -10,20 +10,20 @@ export interface Stroke {
   width: number;
 }
 
-export interface ArcNode {
-  type: 'proposition' | 'relation';
-  id?: string;
-  text?: string;
-  relationId?: string;
-  relationName?: string;
-  mainIndex?: number;
-  children?: ArcNode[];
+export interface ArcNodeData {
+  id: string;
+  type: 'leaf' | 'group';
+  proposition?: any; // We'll use Proposition from parser
+  children?: ArcNodeData[];
+  relation?: string;
 }
 
 export interface SavedAnalysis {
   id: string;
   title: string;
   text?: string;
+  propositions?: any[];
   strokes?: Stroke[];
+  arcNodes?: ArcNodeData[];
   updatedAt: number;
 }

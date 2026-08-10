@@ -29,51 +29,45 @@ Siga estritamente as diretrizes clássicas do método Arcing para a divisão do 
 Este é o núcleo do seu comportamento. Você deve rastrear conectivos e conjunções em qualquer posição da proposição:
 - Conectivos Iniciais: São os mais fáceis (ex: "Porque pela graça...", "Portanto, apresenteis...").
 - Conectivos Mediais/Postergados (Postpositive Conjunctions): Em traduções formais e no grego original, partículas lógicas como "pois", "portanto" ("therefore" / "οὖν") ou "porque" ("for" / "γάρ") frequentemente aparecem no meio da frase, após o sujeito ou verbo. Você deve varrer a cláusula inteira, localizar esse conectivo e usá-lo para determinar a relação lógica da proposição inteira (ex: em "Rogo-vos, POIS, irmãos...", o conectivo é "pois", indicando uma Inferência, embora esteja posicionado no meio da frase).
+- Falsos Conectivos (Pronomes): JAMAIS confunda pronomes reflexivos ou oblíquos ligados por hífen (ex: "humilhou-se", "entregou-se", "amou-o") com conectivos lógicos (como o "se" condicional). A palavra "se" só é conectivo se introduzir uma condição, não se for parte de um verbo.
 - Asíndeto (Conectivos Ocultos): Se não houver conectivo físico expresso na frase, analise a relação conceitual de coesão e proponha uma "Conjunção de Teste" artificial entre colchetes para expor a lógica implícita (ex: [porque], [portanto]).
 
 Saída esperada:
-Responda APENAS com um objeto JSON estrito no seguinte formato:
-{
-  "propositions": [
-    {
-      "id": "16a",
-      "text": "Porque Deus amou o mundo de tal maneira",
-      "originalText": "Porque Deus amou o mundo de tal maneira",
-      "connectiveMatch": { "word": "Porque", "relations": [{"id": "G", "category": "Subord. Declaração Distinta", "name": "Base / Fundamento / Causa", "testConjunction": "porque"}] }
-    }
-    // ... outras proposições
-  ],
-  "tree": {
-    "type": "relation",
-    "relationId": "G",
-    "relationName": "Base / Fundamento / Causa",
-    "mainIndex": 0,
-    "children": [
-      {
-        "type": "proposition",
-        "id": "16a",
-        "text": "Porque Deus amou o mundo de tal maneira"
-      },
-      {
-        "type": "relation",
-        "relationId": "Ac/Res",
-        "relationName": "Ação-Resultado",
-        "mainIndex": 0,
-        "children": [
-          {
-            "type": "proposition",
-            "id": "16b",
-            "text": "que deu o seu Filho unigênito,"
-          }
-        ]
-      }
-    ]
+Responda APENAS com um array JSON estrito no seguinte formato:
+[
+  {
+    "id": "16a",
+    "text": "Porque Deus amou o mundo de tal maneira",
+    "originalText": "Porque Deus amou o mundo de tal maneira",
+    "hint": "Agrupe com a proposição anterior (ou com o bloco principal), pois 'Porque' introduz a Base/Causa da ação principal.",
+    "connectiveMatch": { "word": "Porque", "relations": [{"id": "G", "category": "Subord. Declaração Distinta", "name": "Base / Fundamento / Causa", "testConjunction": "porque"}] }
+  },
+  {
+    "id": "16b",
+    "text": "que deu o seu Filho unigênito,",
+    "originalText": "que deu o seu Filho unigênito,",
+    "hint": "Agrupe com 'Deus amou o mundo de tal maneira', pois a palavra 'que' introduz o resultado direto desse amor.",
+    "connectiveMatch": { "word": "que", "relations": [{"id": "Ac/Res", "category": "Subord. Declaração Distinta", "name": "Ação-Resultado", "testConjunction": "de modo que"}] }
+  },
+  {
+    "id": "16c",
+    "text": "para que todo o que nele crê não pereça,",
+    "originalText": "para que todo o que nele crê não pereça,",
+    "hint": "Agrupe com a ação de Deus dar Seu Filho, pois o conectivo 'para que' introduz o propósito dessa ação.",
+    "connectiveMatch": { "word": "para que", "relations": [{"id": "Ac/Pur", "category": "Subord. Declaração Distinta", "name": "Ação-Propósito", "testConjunction": "para que / a fim de que"}] }
+  },
+  {
+    "id": "16d",
+    "text": "mas tenha a vida eterna.",
+    "originalText": "mas tenha a vida eterna.",
+    "hint": "Agrupe com 'não pereça' (Negativo), pois a palavra 'mas' introduz a contraparte positiva (Positivo).",
+    "connectiveMatch": { "word": "mas", "relations": [{"id": "A", "category": "Coordenadas", "name": "Alternativa", "testConjunction": "ou"}] }
   }
-}
+]
 
-Para a árvore (tree), você DEVE agrupar as proposições hierarquicamente. Use "type": "relation" para nós que agrupam, informando "relationId" e "relationName". O "mainIndex" (0 ou 1, ou mais) indica qual dos filhos é a ideia principal (se for uma relação subordinada, aponta para a principal; se for coordenada, pode ser null ou não aplicável, mas geralmente as coordenadas têm peso igual). O array "children" contém as proposições ou outras relações filhas. Use "type": "proposition" para as folhas da árvore, informando "id" e "text".
-
-Atenção: O campo relations deve conter os objetos exatos de relação (apenas id, category, name e testConjunction) correspondentes à conjunção encontrada, de acordo com as seguintes relações oficiais do método:
+Atenção: O campo relations deve conter os objetos exatos de relação (apenas id, category, name e testConjunction) correspondentes à conjunção encontrada.
+O campo hint DEVE ser preenchido para cada proposição, contendo uma dica direta, curta e clara (máx 2 frases) voltada para o usuário, ensinando com qual proposição ou bloco agrupar e qual a relação mais provável (como demonstrado nos exemplos). Você DEVE OBRIGATORIAMENTE citar a palavra ou frase conectiva dentro da sua dica.
+De acordo com as seguintes relações oficiais do método:
 
 1. Série (S) - Coordenadas (teste: e)
 2. Progressão (P) - Coordenadas (teste: então / finalmente)
@@ -120,7 +114,18 @@ ${text}
       const parsed = JSON.parse(resultText);
       res.json(parsed);
 
-    } catch (error) {
+    } catch (error: any) {
+      // Check for quota exceeded or other specific Gemini errors
+      const isQuotaError = 
+        error?.status === 429 || 
+        error?.status === "RESOURCE_EXHAUSTED" ||
+        (error?.message && error.message.includes("quota"));
+
+      if (isQuotaError) {
+        console.warn("Gemini API quota exceeded. Falling back to local parsing...");
+        return res.status(429).json({ error: "Gemini API quota exceeded. Falling back to local parsing..." });
+      }
+
       console.error("AI parsing error:", error);
       res.status(500).json({ error: "Failed to parse text" });
     }
