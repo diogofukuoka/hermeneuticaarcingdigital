@@ -131,7 +131,7 @@ function addProposition(propositions: Proposition[], text: string, vCount: numbe
   let hint = undefined;
   if (connMatch && connMatch.relations.length > 0) {
     const rel = connMatch.relations[0];
-    hint = `Dica (Local): A palavra '${connMatch.word}' geralmente introduz a relação de ${rel.name}.`;
+    hint = `Dica de análise gramatical:\n\nA palavra '${connMatch.word}' geralmente introduz uma relação de ${rel.name} (${rel.category}).\n\nTente agrupar esta proposição com a(s) proposição(ões) anterior(es) que formam a ação ou declaração principal à qual este conectivo se refere.`;
   }
   
   propositions.push({

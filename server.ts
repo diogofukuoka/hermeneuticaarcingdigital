@@ -39,34 +39,37 @@ Responda APENAS com um array JSON estrito no seguinte formato:
     "id": "16a",
     "text": "Porque Deus amou o mundo de tal maneira",
     "originalText": "Porque Deus amou o mundo de tal maneira",
-    "hint": "Agrupe com a proposição anterior (ou com o bloco principal), pois 'Porque' introduz a Base/Causa da ação principal.",
+    "hint": "Agrupe com a proposição anterior (ou com o bloco principal), pois a palavra 'Porque' introduz a Base/Causa da ação principal. Aqui, o amor de Deus é a base ou causa primária da ação que se segue ou do que foi dito anteriormente.",
     "connectiveMatch": { "word": "Porque", "relations": [{"id": "G", "category": "Subord. Declaração Distinta", "name": "Base / Fundamento / Causa", "testConjunction": "porque"}] }
   },
   {
     "id": "16b",
     "text": "que deu o seu Filho unigênito,",
     "originalText": "que deu o seu Filho unigênito,",
-    "hint": "Agrupe com 'Deus amou o mundo de tal maneira', pois a palavra 'que' introduz o resultado direto desse amor.",
+    "hint": "Agrupe com 'Deus amou o mundo de tal maneira' (16a). O pronome 'que' (com sentido de 'de modo que') introduz o resultado direto desse amor. A intensidade do amor de Deus resultou na entrega de Seu Filho.",
     "connectiveMatch": { "word": "que", "relations": [{"id": "Ac/Res", "category": "Subord. Declaração Distinta", "name": "Ação-Resultado", "testConjunction": "de modo que"}] }
   },
   {
     "id": "16c",
     "text": "para que todo o que nele crê não pereça,",
     "originalText": "para que todo o que nele crê não pereça,",
-    "hint": "Agrupe com a ação de Deus dar Seu Filho, pois o conectivo 'para que' introduz o propósito dessa ação.",
+    "hint": "Agrupe com a ação de Deus dar Seu Filho (16b). O conectivo 'para que' introduz claramente o propósito divino dessa entrega: evitar a perdição dos que creem.",
     "connectiveMatch": { "word": "para que", "relations": [{"id": "Ac/Pur", "category": "Subord. Declaração Distinta", "name": "Ação-Propósito", "testConjunction": "para que / a fim de que"}] }
   },
   {
     "id": "16d",
     "text": "mas tenha a vida eterna.",
     "originalText": "mas tenha a vida eterna.",
-    "hint": "Agrupe com 'não pereça' (Negativo), pois a palavra 'mas' introduz a contraparte positiva (Positivo).",
+    "hint": "Agrupe com 'não pereça' (16c), formando uma relação de Negativo-Positivo ou Alternativa. A conjunção 'mas' contrasta a perdição com o ganho da vida eterna, mostrando a contraparte positiva do propósito de Deus.",
     "connectiveMatch": { "word": "mas", "relations": [{"id": "A", "category": "Coordenadas", "name": "Alternativa", "testConjunction": "ou"}] }
   }
 ]
 
 Atenção: O campo relations deve conter os objetos exatos de relação (apenas id, category, name e testConjunction) correspondentes à conjunção encontrada.
-O campo hint DEVE ser preenchido para cada proposição, contendo uma dica direta, curta e clara (máx 2 frases) voltada para o usuário, ensinando com qual proposição ou bloco agrupar e qual a relação mais provável (como demonstrado nos exemplos). Você DEVE OBRIGATORIAMENTE citar a palavra ou frase conectiva dentro da sua dica.
+O campo hint DEVE ser preenchido para cada proposição e deve ser muito claro e didático. A dica DEVE, obrigatoriamente, responder:
+1. Com qual(is) proposição(ões) ou bloco(s) esta proposição deve ser arqueada.
+2. O porquê desta ligação, citando a palavra conectiva encontrada e a lógica do autor.
+3. Uma breve explicação do sentido teológico/gramatical da relação.
 De acordo com as seguintes relações oficiais do método:
 
 1. Série (S) - Coordenadas (teste: e)
