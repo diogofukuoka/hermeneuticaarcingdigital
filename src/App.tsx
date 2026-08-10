@@ -172,7 +172,22 @@ export default function App() {
       if (currentId) updateRemote({ title: newTitle });
     }
     
-    const parsed = parseText(textToParse);
+    let parsed: Proposition[] = [];
+    try {
+      const response = await fetch('/api/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToParse })
+      });
+      if (response.ok) {
+        parsed = await response.json();
+      } else {
+        throw new Error("API parsing failed");
+      }
+    } catch (e) {
+      console.warn("Falling back to local parsing:", e);
+      parsed = parseText(textToParse);
+    }
     setPropositions(parsed);
     setIsAnalyzing(false);
   };
