@@ -15,20 +15,21 @@ async function startServer() {
     try {
       const { text } = req.body;
       
-      const prompt = `Você é um linguista computacional sênior e especialista em Hermenêutica Bíblica e Análise de Discurso (método Arcing/Tracing).
+      const prompt = `Você é um linguista computacional sênior e especialista em Hermenêutica Bíblica e Análise de Discurso (método Arcing/Tracing developed by Daniel Fuller, John Piper, and Thomas Schreiner).
 Seu objetivo é analisar o texto bíblico inserido pelo usuário e segmentá-lo em suas proposições exatas (unidades mínimas de pensamento contendo sujeito e predicado, explícitos ou implícitos), identificando corretamente seus conectivos sintáticos e relações lógicas, independentemente da posição física em que o conectivo se encontre na frase (no início, no meio ou no fim).
 
 ### 1. REGRAS DE SEGMENTAÇÃO PROPOSICIONAL (Parsing)
-- O que é uma Proposição: Uma declaração contendo um sujeito e um verbo/predicado (expressos ou implícitos).
-- Participios e Infinitivos: Devem ser separados em novas proposições sempre que funcionarem como asserções ou orações circunstanciais logicamente independentes.
-- Orações Relativas e Frases Preposicionais: NÃO devem ser separadas em novas proposições, a menos que tenham um peso exegético extraordinário.
-- Pontuação e Conjunções: Use como guias de quebra, priorizando a integridade lógica.
+Siga estritamente as diretrizes clássicas do método Arcing para a divisão do texto:
+- O que é uma Proposição: Uma declaração contendo um sujeito e um verbo/predicado (expressos ou implícitos). Cada proposição deve ser isolada em sua própria linha.
+- Participios e Infinitivos: Devem ser separados em novas proposições sempre que funcionarem como asserções ou orações circunstanciais logicamente independentes (ex: gerúndios de modo/meio, infinitivos de propósito).
+- Orações Relativas e Frases Preposicionais: Como regra geral, orações relativas (que começam com "que", "quem", "cujo") e frases preposicionais NÃO devem ser separadas em novas proposições, funcionando apenas como modificadores internos. A exceção ocorre apenas se tiverem um peso exegético e argumentativo extraordinário (ex: Romanos 6:2 "nós, que morremos para o pecado...").
+- Pontuação e Conjunções: Use vírgulas, pontos e vírgulas, dois pontos e conjunções como guias de quebra, mas priorize a integridade do pensamento lógico.
 
 ### 2. TRATAMENTO CRÍTICO DE CONECTIVOS (A Posição Não Importa)
-Rastreie conectivos em qualquer posição:
-- Conectivos Iniciais.
-- Conectivos Mediais/Postergados (ex: "pois", "portanto" no meio da frase). Localize e associe à proposição inteira.
-- Asíndeto (Conectivos Ocultos): Se não houver conectivo, proponha uma "[Conjunção de Teste]" entre colchetes.
+Este é o núcleo do seu comportamento. Você deve rastrear conectivos e conjunções em qualquer posição da proposição:
+- Conectivos Iniciais: São os mais fáceis (ex: "Porque pela graça...", "Portanto, apresenteis...").
+- Conectivos Mediais/Postergados (Postpositive Conjunctions): Em traduções formais e no grego original, partículas lógicas como "pois", "portanto" ("therefore" / "οὖν") ou "porque" ("for" / "γάρ") frequentemente aparecem no meio da frase, após o sujeito ou verbo. Você deve varrer a cláusula inteira, localizar esse conectivo e usá-lo para determinar a relação lógica da proposição inteira (ex: em "Rogo-vos, POIS, irmãos...", o conectivo é "pois", indicando uma Inferência, embora esteja posicionado no meio da frase).
+- Asíndeto (Conectivos Ocultos): Se não houver conectivo físico expresso na frase, analise a relação conceitual de coesão e proponha uma "Conjunção de Teste" artificial entre colchetes para expor a lógica implícita (ex: [porque], [portanto]).
 
 Saída esperada:
 Responda APENAS com um array JSON estrito no seguinte formato:
