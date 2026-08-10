@@ -189,31 +189,37 @@ export default function App() {
     }
     
     let parsed: Proposition[] = [];
-    try {
-      const response = await fetch(useAI ? '/api/parse' : '/api/parse', { // Assuming useAI changes behavior if needed, currently both hit /api/parse which returns propositions and tree
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToParse })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Check if data is array (old format) or object (new format)
-        if (Array.isArray(data)) {
-           parsed = data;
-        } else if (data.propositions) {
-           parsed = data.propositions;
-           if (useAI && data.tree) {
-             setArcTree(data.tree);
-             setShowAIPanel(true);
-           }
+    if (useAI) {
+      try {
+        const response = await fetch('/api/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: textToParse })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          // Check if data is array (old format) or object (new format)
+          if (Array.isArray(data)) {
+             parsed = data;
+          } else if (data.propositions) {
+             parsed = data.propositions;
+             if (data.tree) {
+               setArcTree(data.tree);
+               setShowAIPanel(true);
+             }
+          }
+        } else {
+          throw new Error("API parsing failed");
         }
-      } else {
-        throw new Error("API parsing failed");
+      } catch (e) {
+        console.warn("Falling back to local parsing:", e);
+        parsed = parseText(textToParse);
       }
-    } catch (e) {
-      console.warn("Falling back to local parsing:", e);
+    } else {
       parsed = parseText(textToParse);
+      setShowAIPanel(false);
     }
+    
     setPropositions(parsed);
     setIsAnalyzing(false);
   };

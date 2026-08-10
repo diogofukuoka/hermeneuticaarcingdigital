@@ -46,13 +46,13 @@ export function TextPanel({ text, setText, propositions, onAnalyze, isAnalyzing 
             >
               Analisar
             </button>
-            {text.trim().length > 0 && text.trim().length < 50 && (
+            {text.trim().length > 0 && (
               <button
                 onClick={() => onAnalyze(true)}
                 disabled={isAnalyzing}
                 className="bg-indigo-600 text-white px-4 py-2 h-14 text-sm rounded font-medium hover:bg-indigo-700 disabled:bg-indigo-400 transition-colors shrink-0 flex items-center justify-center shadow-sm"
               >
-                {isAnalyzing ? 'Buscando...' : '✨ Analisar com IA'}
+                {isAnalyzing ? 'Buscando...' : '✨ IA'}
               </button>
             )}
           </div>
