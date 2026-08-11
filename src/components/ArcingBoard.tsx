@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Proposition } from '../utils/parser';
+import { Proposition, findConnectives, ConnectiveMatch } from '../utils/parser';
 import { ArcNodeData } from '../types';
 import { Plus, Trash2, SplitSquareHorizontal, ChevronDown, X, Scissors, Link2 } from 'lucide-react';
 import { relations } from '../utils/relations';
@@ -12,7 +12,7 @@ const groupedRelations = relations.reduce((acc, rel) => {
   return acc;
 }, {} as Record<string, typeof relations[0][]>);
 
-function ConnectivePopup({ connectiveMatch, anchorEl }: { connectiveMatch: any, anchorEl: HTMLElement | null }) {
+function ConnectivePopup({ connectiveMatch, anchorEl, onRemove }: { connectiveMatch: any, anchorEl: HTMLElement | null, onRemove: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
 
@@ -53,6 +53,14 @@ function ConnectivePopup({ connectiveMatch, anchorEl }: { connectiveMatch: any, 
             </div>
           );
         })}
+      </div>
+      <div className="mt-2 pt-2 border-t border-slate-100 flex justify-end">
+        <button 
+          onClick={onRemove}
+          className="text-[10px] uppercase font-bold text-red-500 hover:text-red-700 flex items-center gap-1 p-1.5 rounded hover:bg-red-50 transition-colors"
+        >
+          <Trash2 className="w-3 h-3" /> Remover Realce
+        </button>
       </div>
     </div>,
     document.body
@@ -139,7 +147,8 @@ const ArcNodeComponent: React.FC<{
   onMerge?: (id: string) => void,
   mergeTarget?: string | null,
   touchMode?: 'split' | 'merge' | null,
-  setTouchMode?: (val: 'split' | 'merge' | null) => void
+  setTouchMode?: (val: 'split' | 'merge' | null) => void,
+  onRemoveConnective?: (propId: string, match: any) => void
 }> = ({ 
   node, 
   onUngroup, 
@@ -154,11 +163,14 @@ const ArcNodeComponent: React.FC<{
   onMerge,
   mergeTarget,
   touchMode,
-  setTouchMode
+  setTouchMode,
+  onRemoveConnective
 }) => {
   const anchorRef = useRef<HTMLDivElement>(null);
   const textContainerRef = useRef<HTMLDivElement>(null);
   const connectiveRef = useRef<HTMLSpanElement>(null);
+  const [connAnchor, setConnAnchor] = React.useState<HTMLElement | null>(null);
+  const [activeConnMatch, setActiveConnMatch] = React.useState<ConnectiveMatch | null>(null);
 
   const getCaretOffset = (e: React.MouseEvent, container: HTMLElement): number | null => {
     try {
@@ -250,46 +262,60 @@ const ArcNodeComponent: React.FC<{
           <span className="text-xs font-mono font-bold text-amber-500 mr-3 mt-0.5 shrink-0 select-none">
             {prop.id}
           </span>
-          <div ref={textContainerRef} className="text-slate-700 font-sans text-sm leading-relaxed flex-1 prop-text-container">
-            {prop.connectiveMatch ? (
-              (() => {
-                const word = prop.connectiveMatch.word;
-                const idx = prop.connectiveMatch.index !== undefined 
-                              ? prop.connectiveMatch.index 
-                              : prop.text.toLowerCase().indexOf(word.toLowerCase());
-                if (idx === -1) return <span>{prop.text}</span>;
+          <div ref={textContainerRef} data-prop-id={prop.id} className="text-slate-700 font-sans text-sm leading-relaxed flex-1 prop-text-container select-text">
+            {(() => {
+                const matches = prop.connectiveMatches?.length ? prop.connectiveMatches : (prop.connectiveMatch ? [prop.connectiveMatch] : []);
+                if (matches.length === 0) return <span>{prop.text}</span>;
                 
-                const before = prop.text.substring(0, idx);
-                const exactWord = prop.text.substring(idx, idx + word.length);
-                const after = prop.text.substring(idx + word.length);
+                let lastIdx = 0;
+                const nodes = [];
                 
-                return (
-                  <span>
-                    {before}
+                matches.forEach((match, i) => {
+                  const idx = match.index !== undefined ? match.index : prop.text.toLowerCase().indexOf(match.word.toLowerCase());
+                  if (idx === -1 || idx < lastIdx) return;
+                  
+                  const before = prop.text.substring(lastIdx, idx);
+                  const exactWord = prop.text.substring(idx, idx + match.word.length);
+                  
+                  if (before) nodes.push(<span key={`text-${i}`}>{before}</span>);
+                  nodes.push(
                     <span 
-                      ref={connectiveRef}
+                      key={`match-${i}`}
                       className="font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1 py-0.5 cursor-pointer relative transition-colors hover:bg-indigo-100"
                       onClick={(e) => { 
-                        e.stopPropagation(); 
-                        setActivePopup(activePopup === `conn-${prop.id}` ? null : `conn-${prop.id}`); 
+                        e.stopPropagation();
+                        if (activePopup === `conn-${prop.id}` && activeConnMatch === match) {
+                          setActivePopup(null);
+                        } else {
+                          setActivePopup(`conn-${prop.id}`);
+                          setConnAnchor(e.currentTarget);
+                          setActiveConnMatch(match);
+                        }
                       }}
                     >
                       {exactWord}
-                      
-                      {activePopup === `conn-${prop.id}` && (
-                        <ConnectivePopup 
-                          connectiveMatch={prop.connectiveMatch} 
-                          anchorEl={connectiveRef.current} 
-                        />
-                      )}
                     </span>
-                    {after}
+                  );
+                  lastIdx = idx + match.word.length;
+                });
+                
+                if (lastIdx < prop.text.length) {
+                  nodes.push(<span key="text-last">{prop.text.substring(lastIdx)}</span>);
+                }
+                
+                return (
+                  <span>
+                    {nodes}
+                    {activePopup === `conn-${prop.id}` && activeConnMatch && (
+                      <ConnectivePopup 
+                        connectiveMatch={activeConnMatch} 
+                        anchorEl={connAnchor} 
+                        onRemove={() => { onRemoveConnective(prop.id, activeConnMatch); setActiveConnMatch(null); }} 
+                      />
+                    )}
                   </span>
                 );
-              })()
-            ) : (
-              <span>{prop.text}</span>
-            )}
+              })()}
           </div>
           
           {/* Top Boundary Circle */}
@@ -415,31 +441,172 @@ const ArcNodeComponent: React.FC<{
   );
 }
 
+const getLeafCount = (list: ArcNodeData[]): number => {
+  let count = 0;
+  for (const n of list) {
+    if (n.type === 'leaf') count++;
+    else if (n.children) count += getLeafCount(n.children);
+  }
+  return count;
+};
+
 export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: ArcingBoardProps) {
   const [activePopup, setActivePopup] = useState<string | null>(null);
   const [leafWidth, setLeafWidth] = useState<number>(400);
   const [selectedBoundary, setSelectedBoundary] = useState<number | null>(null);
   const [mergeTarget, setMergeTarget] = useState<string | null>(null);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
-  const [touchMode, setTouchMode] = useState<'split' | 'merge' | null>(null);
-  const [history, setHistory] = useState<Proposition[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const lastModifiedByUs = useRef<Proposition[] | null>(null);
+  const [globalSelection, setGlobalSelection] = useState<{propId: string, start: number, text: string, top: number, left: number} | null>(null);
 
   useEffect(() => {
-    if (propositions !== lastModifiedByUs.current && propositions.length > 0) {
-      setHistory([propositions]);
+    const handleSelectionChange = () => {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+          setGlobalSelection(null);
+          return;
+        }
+        
+        const range = sel.getRangeAt(0);
+        
+        let node = range.commonAncestorContainer;
+        let container = null;
+        let propId = null;
+        
+        while (node) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node;
+            if ((el as HTMLElement).classList && (el as HTMLElement).classList.contains('prop-text-container')) {
+              container = el;
+              propId = (el as HTMLElement).getAttribute('data-prop-id');
+              break;
+            }
+          }
+          node = node.parentNode;
+        }
+        
+        if (container && propId) {
+          const preCaretRange = range.cloneRange();
+          preCaretRange.selectNodeContents(container);
+          preCaretRange.setEnd(range.startContainer, range.startOffset);
+          const start = preCaretRange.toString().length;
+          const text = range.toString().trim();
+          
+          if (!text) {
+             setGlobalSelection(null);
+             return;
+          }
+          
+          const rect = range.getBoundingClientRect();
+          setGlobalSelection({
+            propId,
+            start,
+            text,
+            top: rect.top - 36,
+            left: rect.left + (rect.width / 2)
+          });
+        } else {
+          setGlobalSelection(null);
+        }
+      }, 10);
+    };
+    
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, []);
+
+  const handleAddConnective = (propId: string, start: number, word: string) => {
+    const newProps = [...propositions];
+    const idx = newProps.findIndex(p => p.id === propId);
+    if (idx === -1) return;
+    
+    const p = { ...newProps[idx] };
+    const matches = p.connectiveMatches ? [...p.connectiveMatches] : (p.connectiveMatch ? [p.connectiveMatch] : []);
+    
+    const hasOverlap = matches.some(m => 
+      (start >= m.index && start < m.index + m.word.length) ||
+      (start + word.length > m.index && start + word.length <= m.index + m.word.length) ||
+      (start <= m.index && start + word.length >= m.index + m.word.length)
+    );
+    
+    if (!hasOverlap) {
+      matches.push({
+        word,
+        index: start,
+        relations: [{
+          id: 'manual',
+          name: 'Realce Manual',
+          category: 'Outros', connectives: [], testConjunction: '',
+          description: 'Conectivo realçado manualmente pelo usuário.'
+        }]
+      });
+      matches.sort((a, b) => a.index - b.index);
+      p.connectiveMatches = matches;
+      newProps[idx] = p;
+      updateState(newProps, rebindTree(nodes, newProps));
+    }
+    setGlobalSelection(null);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const handleRemoveConnective = (propId: string, matchToRemove: ConnectiveMatch) => {
+    const newProps = [...propositions];
+    const idx = newProps.findIndex(p => p.id === propId);
+    if (idx === -1) return;
+    
+    const p = { ...newProps[idx] };
+    if (p.connectiveMatches) {
+      p.connectiveMatches = p.connectiveMatches.filter(m => m !== matchToRemove && m.index !== matchToRemove.index);
+    }
+    newProps[idx] = p;
+    updateState(newProps, rebindTree(nodes, newProps));
+  };
+  
+  const rebindTree = (nodesList: ArcNodeData[], newProps: Proposition[]): ArcNodeData[] => {
+    return nodesList.map(n => {
+      if (n.type === 'leaf') {
+        const updatedProp = newProps.find(p => p.id === n.proposition?.id);
+        return { ...n, proposition: updatedProp || n.proposition };
+      }
+      if (n.children) {
+        return { ...n, children: rebindTree(n.children, newProps) };
+      }
+      return n;
+    });
+  };
+
+  const [touchMode, setTouchMode] = useState<'split' | 'merge' | null>(null);
+  const [history, setHistory] = useState<{propositions: Proposition[], nodes: ArcNodeData[]}[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const lastModifiedProps = useRef<Proposition[] | null>(null);
+  const lastModifiedNodes = useRef<ArcNodeData[] | null>(null);
+
+  useEffect(() => {
+    if (propositions !== lastModifiedProps.current && propositions.length > 0) {
+      // Setup initial history or completely external update
+      const initialNodes = nodes.length > 0 && getLeafCount(nodes) === propositions.length 
+        ? nodes 
+        : propositions.map(p => ({ id: p.id, type: 'leaf', proposition: p } as ArcNodeData));
+      
+      setHistory([{ propositions, nodes: initialNodes }]);
       setHistoryIndex(0);
-      lastModifiedByUs.current = propositions;
+      lastModifiedProps.current = propositions;
+      lastModifiedNodes.current = initialNodes;
+      
+      if (nodes !== initialNodes) {
+        setNodes(initialNodes);
+      }
     }
   }, [propositions]);
 
-  const updatePropositions = (newArr: Proposition[]) => {
-    lastModifiedByUs.current = newArr;
-    setPropositions(newArr);
+  const updateState = (newProps: Proposition[], newNodes: ArcNodeData[]) => {
+    lastModifiedProps.current = newProps;
+    lastModifiedNodes.current = newNodes;
+    setPropositions(newProps);
+    setNodes(newNodes);
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1);
-      return [...newHistory, newArr];
+      return [...newHistory, { propositions: newProps, nodes: newNodes }];
     });
     setHistoryIndex(prev => prev + 1);
   };
@@ -448,8 +615,11 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       setHistoryIndex(newIndex);
-      lastModifiedByUs.current = history[newIndex];
-      setPropositions(history[newIndex]);
+      const state = history[newIndex];
+      lastModifiedProps.current = state.propositions;
+      lastModifiedNodes.current = state.nodes;
+      setPropositions(state.propositions);
+      setNodes(state.nodes);
     }
   };
 
@@ -457,9 +627,34 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       setHistoryIndex(newIndex);
-      lastModifiedByUs.current = history[newIndex];
-      setPropositions(history[newIndex]);
+      const state = history[newIndex];
+      lastModifiedProps.current = state.propositions;
+      lastModifiedNodes.current = state.nodes;
+      setPropositions(state.propositions);
+      setNodes(state.nodes);
     }
+  };
+
+  const replaceLeaf = (nodesList: ArcNodeData[], targetId: string, replacements: ArcNodeData[]): ArcNodeData[] => {
+    return nodesList.flatMap(n => {
+      if (n.type === 'leaf' && n.proposition?.id === targetId) return replacements;
+      if (n.children) {
+        const newChildren = replaceLeaf(n.children, targetId, replacements);
+        return newChildren.length > 0 ? [{ ...n, children: newChildren }] : [];
+      }
+      return [n];
+    });
+  };
+
+  const removeLeaf = (nodesList: ArcNodeData[], targetId: string): ArcNodeData[] => {
+    return nodesList.flatMap(n => {
+      if (n.type === 'leaf' && n.proposition?.id === targetId) return [];
+      if (n.children) {
+        const newChildren = removeLeaf(n.children, targetId);
+        return newChildren.length > 0 ? [{ ...n, children: newChildren }] : [];
+      }
+      return [n];
+    });
   };
 
   useEffect(() => {
@@ -510,8 +705,10 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
     const match = p.id.match(/^(\d+)([a-z]*)$/);
     const baseNum = match ? match[1] : p.id;
     
-    const newP1 = { ...p, id: p.id + '_a', text: t1, originalText: t1, connectiveMatch: undefined, hint: undefined };
-    const newP2 = { ...p, id: p.id + '_b', text: t2, originalText: t2, connectiveMatch: undefined, hint: undefined };
+    const { matches: c1, hint: h1 } = findConnectives(t1);
+    const { matches: c2, hint: h2 } = findConnectives(t2);
+    const newP1 = { ...p, id: p.id + '_a', text: t1, originalText: t1, connectiveMatch: c1.length > 0 ? c1[0] : undefined, connectiveMatches: c1, hint: h1 };
+    const newP2 = { ...p, id: p.id + '_b', text: t2, originalText: t2, connectiveMatch: c2.length > 0 ? c2[0] : undefined, connectiveMatches: c2, hint: h2 };
     
     const newArr = [...prev];
     newArr.splice(idx, 1, newP1, newP2);
@@ -524,7 +721,14 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
         subCounter++;
       }
     }
-    updatePropositions(newArr);
+    
+    // Update nodes tree
+    const newP1Leaf = { id: newP1.id, type: 'leaf', proposition: newP1 } as ArcNodeData;
+    const newP2Leaf = { id: newP2.id, type: 'leaf', proposition: newP2 } as ArcNodeData;
+    let newNodes = replaceLeaf(nodes, p.id, [newP1Leaf, newP2Leaf]);
+    newNodes = rebindTree(newNodes, newArr);
+    
+    updateState(newArr, newNodes);
   };
 
   const handleMergePropositions = (propId2: string) => {
@@ -560,7 +764,9 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
     const match = p1.id.match(/^(\d+)([a-z]*)$/);
     const baseNum = match ? match[1] : p1.id;
     
-    const newP = { ...p1, text: p1.text + " " + p2.text, originalText: p1.originalText + " " + p2.originalText, connectiveMatch: undefined, hint: undefined };
+    const newText = p1.text + " " + p2.text;
+    const { matches, hint } = findConnectives(newText);
+    const newP = { ...p1, text: newText, originalText: p1.originalText + " " + p2.originalText, connectiveMatch: matches.length > 0 ? matches[0] : undefined, connectiveMatches: matches, hint: hint };
     
     const newArr = [...prev];
     newArr.splice(firstIdx, 2, newP);
@@ -574,7 +780,12 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
       }
     }
     
-    updatePropositions(newArr);
+    // Update nodes tree
+    let newNodes = replaceLeaf(nodes, p1.id, [{ id: newP.id, type: 'leaf', proposition: newP } as ArcNodeData]);
+    newNodes = removeLeaf(newNodes, p2.id);
+    newNodes = rebindTree(newNodes, newArr);
+    
+    updateState(newArr, newNodes);
     setMergeTarget(null);
   };
 
@@ -595,26 +806,9 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
     return () => clearTimeout(timer);
   }, [propositions]);
 
-  useEffect(() => {
-    // Only reset if we don't have nodes or the proposition count changed drastically
-    // For a robust app, we'd persist the arc tree and map it to new propositions.
-    if (nodes.length === 0 || propositions.length !== getLeafCount(nodes)) {
-      setNodes(propositions.map(p => ({
-        id: p.id,
-        type: 'leaf',
-        proposition: p
-      })));
-    }
-  }, [propositions]);
 
-  const getLeafCount = (list: ArcNodeData[]): number => {
-    let count = 0;
-    for (const n of list) {
-      if (n.type === 'leaf') count++;
-      else if (n.children) count += getLeafCount(n.children);
-    }
-    return count;
-  };
+
+
 
   const handleBoundaryClick = (index: number) => {
     if (selectedBoundary === null) {
@@ -676,15 +870,12 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
           return { success: false, nodes: nodesList };
         };
 
-        setNodes(prev => {
-          const result = attemptGroup(prev, startIdx, endIdx, 0);
-          if (result.success) {
-            return result.nodes;
-          } else {
-            console.warn("Invalid grouping range (arcs cannot cross)");
-            return prev;
-          }
-        });
+        const result = attemptGroup(nodes, startIdx, endIdx, 0);
+        if (result.success) {
+          updateState(propositions, result.nodes);
+        } else {
+          console.warn("Invalid grouping range (arcs cannot cross)");
+        }
         
         setSelectedBoundary(null);
       }
@@ -708,7 +899,8 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
       }
       return result;
     };
-    setNodes(prev => ungroupList(prev));
+    const newNodes = ungroupList(nodes);
+    updateState(propositions, newNodes);
   };
   
   const handleRelationChange = (nodeId: string, rel: string) => {
@@ -719,17 +911,41 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
         return n;
       });
     };
-    setNodes(prev => updateRel(prev));
+    const newNodes = updateRel(nodes);
+    updateState(propositions, newNodes);
   };
 
   return (
-    <div className="flex flex-col flex-1 relative overflow-auto bg-slate-100">
+    <div className="flex flex-col flex-1 relative overflow-hidden bg-slate-100">
+      {globalSelection && (
+        createPortal(
+          <button 
+            className="fixed z-[120] bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-md shadow-lg transform -translate-x-1/2 transition-colors flex items-center gap-1.5"
+            style={{ top: globalSelection.top, left: globalSelection.left }}
+            onMouseDown={(e) => {
+              e.preventDefault(); 
+              e.stopPropagation();
+              handleAddConnective(globalSelection.propId, globalSelection.start, globalSelection.text);
+            }}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleAddConnective(globalSelection.propId, globalSelection.start, globalSelection.text);
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Realçar
+          </button>,
+          document.body
+        )
+      )}
       <style>{`
         .split-mode-active .prop-text-container,
         .split-mode-active .prop-text-container * {
           cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='24'%3E%3Ctext x='0' y='20' font-size='22' font-weight='bold' fill='%236366f1'%3E|%3C/text%3E%3C/svg%3E") 8 12, text !important;
         }
       `}</style>
+      
       {/* Invisible measurer to determine optimal leaf width */}
       <div className="absolute top-0 left-0 invisible pointer-events-none opacity-0 z-[-1] overflow-hidden h-0 flex flex-col">
         {propositions.map(p => (
@@ -742,10 +958,9 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
         ))}
       </div>
 
-      <div className="sticky top-0 z-40 p-4 border-b bg-slate-50/90 backdrop-blur shrink-0 flex justify-between items-center shadow-sm">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Quadro de Arcos</span>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1">
+            {/* Floating Toolbar */}
+      <div className="absolute top-4 right-6 z-50 flex items-center gap-3">
+        <div className="flex items-center gap-1 bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-lg p-1">
             <button
               onClick={() => setTouchMode(prev => prev === 'split' ? null : 'split')}
               className={`p-1.5 rounded transition-colors ${touchMode === 'split' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}
@@ -779,15 +994,15 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
             </button>
           </div>
           {nodes.length > 0 && (
-            <span className="text-[10px] font-bold uppercase text-indigo-500 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100">
-              {nodes.length} Blocos Restantes
+            <span className="text-[10px] font-bold uppercase text-indigo-600 bg-white/90 backdrop-blur shadow-sm px-3 py-1.5 rounded-lg border border-slate-200">
+              {nodes.length} Blocos
             </span>
           )}
-        </div>
       </div>
       
-      <div className={`flex-1 p-8 min-w-max pb-64 ${selectedBoundary !== null ? 'cursor-crosshair' : ''} ${isCtrlPressed || touchMode === 'split' ? 'split-mode-active' : ''}`} onClick={() => { setActivePopup(null); setTouchMode(null); }}>
-        {nodes.length === 0 ? (
+      <div className="flex-1 overflow-auto">
+        <div className={`p-8 min-w-max pb-64 ${selectedBoundary !== null ? 'cursor-crosshair' : ''} ${isCtrlPressed || touchMode === 'split' ? 'split-mode-active' : ''}`} onClick={() => { setActivePopup(null); setTouchMode(null); }}>
+          {nodes.length === 0 ? (
            <div className="text-slate-400 text-sm text-center mt-20">
              Segmentos aparecerão aqui para serem arqueados.
            </div>
@@ -824,11 +1039,13 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
                    mergeTarget={mergeTarget}
                    touchMode={touchMode}
                    setTouchMode={setTouchMode}
-                 />
+          onRemoveConnective={typeof handleRemoveConnective !== 'undefined' ? handleRemoveConnective : undefined}
+        />
                </div>
              )})}
            </div>
         )}
+        </div>
       </div>
     </div>
   );

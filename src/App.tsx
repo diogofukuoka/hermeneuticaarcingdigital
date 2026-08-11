@@ -5,6 +5,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArcingBoard } from './components/ArcingBoard';
+import { bibleBooks } from './utils/bible';
+import { NumberPicker } from './components/NumberPicker';
+import { bibleBooks as _ignore } from './utils/bible';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RelationsGuide } from './components/RelationsGuide';
 import { SavedAnalysesModal } from './components/SavedAnalysesModal';
@@ -23,8 +26,22 @@ export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isSavedModalOpen, setIsSavedModalOpen] = useState(false);
   const [arcNodes, setArcNodes] = useState<ArcNodeData[]>([]);
+  const [selectedBook, setSelectedBook] = useState('Gênesis');
+  const [selectedChapter, setSelectedChapter] = useState('1');
+  const [selectedStartVerse, setSelectedStartVerse] = useState('');
+  const [selectedEndVerse, setSelectedEndVerse] = useState('');
   const [savedItems, setSavedItems] = useState<SavedAnalysis[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [activePicker, setActivePicker] = useState<'chapter' | 'startVerse' | 'endVerse' | null>(null);
+  
+  const chapterBtnRef = React.useRef<HTMLButtonElement>(null);
+  const startVerseBtnRef = React.useRef<HTMLButtonElement>(null);
+  const endVerseBtnRef = React.useRef<HTMLButtonElement>(null);
+  
+  const currentBookData = bibleBooks.find(b => b.name === selectedBook);
+  const maxChapters = currentBookData?.chapters || 150;
+  const maxVerses = 176; // Psalm 119 has 176 verses
+
 
   // Sync the list of saved analyses automatically from Firestore
   useEffect(() => {
@@ -90,6 +107,14 @@ export default function App() {
   const handleSetText = (val: string) => {
     setText(val);
     if (currentId) updateRemote({ text: val });
+  };
+
+  const handleSetPropositions = (valOrFn: any) => {
+    setPropositions(prev => {
+      const nextProps = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      if (currentId) updateRemote({ propositions: JSON.stringify(nextProps) } as any);
+      return nextProps;
+    });
   };
 
   const handleSetArcNodes = (valOrFn: any) => {
@@ -161,24 +186,23 @@ export default function App() {
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
+    
+    const refString = `${selectedBook} ${selectedChapter}${selectedStartVerse ? ':' + selectedStartVerse : ''}${selectedStartVerse && selectedEndVerse && selectedEndVerse !== selectedStartVerse ? '-' + selectedEndVerse : ''}`;
+    
     let textToParse = text;
     let newTitle = title;
     
-    // Check if it's a reference and fetch
-    if (text.trim().length > 0 && text.length < 50) {
-      const fetchedText = await fetchBibleText(text);
-      if (fetchedText) {
-        newTitle = text.trim();
-        setTitle(newTitle);
-        textToParse = fetchedText;
-        setText(fetchedText); // Set without triggering immediate auto-save
-        if (currentId) updateRemote({ text: fetchedText, title: newTitle });
-      }
-    } else if (text.trim().length > 0 && title === 'Análise sem título') {
-      newTitle = text.trim().split('\n')[0].substring(0, 50);
-      if (newTitle.length === 50) newTitle += '...';
+    const fetchedText = await fetchBibleText(refString);
+    if (fetchedText) {
+      newTitle = refString;
       setTitle(newTitle);
-      if (currentId) updateRemote({ title: newTitle });
+      textToParse = fetchedText;
+      setText(fetchedText); 
+      if (currentId) updateRemote({ text: fetchedText, title: newTitle });
+    } else {
+      alert("Referência não encontrada. Verifique se o livro, capítulo e versículos estão corretos.");
+      setIsAnalyzing(false);
+      return;
     }
     
     let parsed: Proposition[] = [];
@@ -209,8 +233,8 @@ export default function App() {
     <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <header className="h-14 border-b bg-white flex items-center justify-between px-6 shrink-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white">
-            <span className="font-bold text-sm italic">A</span>
+          <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-lg shadow-sm flex items-center justify-center text-white ring-1 ring-indigo-900/10">
+            <span className="font-serif font-bold text-[22px] leading-none drop-shadow-sm pb-0.5">ב</span>
           </div>
           <h1 className="text-lg font-semibold tracking-tight text-slate-800 uppercase text-xs hidden md:block">
             Hermenêutica Digital <span className="font-light opacity-50 ml-2">| Método Arcing</span>
@@ -257,27 +281,101 @@ export default function App() {
 
       <main className="flex flex-col flex-1 overflow-hidden">
         {/* Text Input Section */}
-        <div className="bg-white border-b px-6 py-4 flex flex-col sm:flex-row gap-4 shrink-0 shadow-sm z-10">
-          <div className="flex-1">
-            <textarea
-              value={text}
-              onChange={(e) => handleSetText(e.target.value)}
-              placeholder="Cole o texto bíblico ou digite uma referência (ex: Jo 3:16) e pressione Enter para quebrar linhas manualmente..."
-              className="w-full h-16 p-3 text-sm border border-slate-200 rounded-lg bg-slate-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none text-slate-700 leading-relaxed shadow-inner transition-all"
-            />
+        <div className="bg-white border-b px-4 py-3 flex flex-col sm:flex-row items-center gap-3 shrink-0 shadow-sm z-10 text-sm">
+          <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
+            <select
+              value={selectedBook}
+              onChange={(e) => setSelectedBook(e.target.value)}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-700 font-medium"
+            >
+              {bibleBooks.map(b => (
+                <option key={b.id} value={b.name}>{b.name}</option>
+              ))}
+            </select>
+            
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium">Cap:</span>
+              <button
+                ref={chapterBtnRef}
+                onClick={() => setActivePicker('chapter')}
+                className="w-12 h-8 px-2 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium flex items-center justify-center transition-colors"
+              >
+                {selectedChapter || '-'}
+              </button>
+              {activePicker === 'chapter' && (
+                <NumberPicker 
+                  title="Selecionar Capítulo"
+                  value={selectedChapter}
+                  onChange={setSelectedChapter}
+                  max={maxChapters}
+                  anchorEl={chapterBtnRef.current}
+                  onClose={() => setActivePicker(null)}
+                />
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-500 font-medium ml-2">Vers:</span>
+              <button
+                ref={startVerseBtnRef}
+                onClick={() => setActivePicker('startVerse')}
+                className="w-12 h-8 px-2 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium flex items-center justify-center transition-colors"
+              >
+                {selectedStartVerse || '-'}
+              </button>
+              {activePicker === 'startVerse' && (
+                <NumberPicker 
+                  title="Versículo Inicial"
+                  value={selectedStartVerse}
+                  onChange={setSelectedStartVerse}
+                  max={maxVerses}
+                  allowEmpty
+                  anchorEl={startVerseBtnRef.current}
+                  onClose={() => setActivePicker(null)}
+                />
+              )}
+              <span className="text-slate-400">-</span>
+              <button
+                ref={endVerseBtnRef}
+                onClick={() => setActivePicker('endVerse')}
+                className="w-12 h-8 px-2 border border-slate-200 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium flex items-center justify-center transition-colors"
+              >
+                {selectedEndVerse || '-'}
+              </button>
+              {activePicker === 'endVerse' && (
+                <NumberPicker 
+                  title="Versículo Final"
+                  value={selectedEndVerse}
+                  onChange={setSelectedEndVerse}
+                  max={maxVerses}
+                  allowEmpty
+                  anchorEl={endVerseBtnRef.current}
+                  onClose={() => setActivePicker(null)}
+                />
+              )}
+            </div>
           </div>
-          <div className="flex sm:flex-col gap-2 shrink-0 justify-center">
+          
+          <div className="flex gap-2 w-full sm:w-auto shrink-0">
             <button
               onClick={handleAnalyze}
-              disabled={isAnalyzing || !text.trim()}
-              className="bg-indigo-600 text-white px-6 py-2 text-sm rounded-lg font-medium hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center h-10"
+              disabled={isAnalyzing || !selectedChapter}
+              className="bg-indigo-600 text-white px-5 py-1.5 text-sm rounded-lg font-medium hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center whitespace-nowrap"
             >
-              {isAnalyzing ? 'Analisando...' : 'Analisar Texto'}
+              {isAnalyzing ? 'Carregando...' : 'Carregar e Analisar'}
             </button>
-            {text && (
+            {propositions.length > 0 && (
               <button
-                onClick={() => handleSetText('')}
-                className="bg-white border border-slate-200 text-slate-600 px-6 py-2 text-sm rounded-lg font-medium hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center h-10"
+                onClick={() => {
+                  setPropositions([]);
+                  setArcNodes([]);
+                  handleSetText('');
+                  setSelectedBook('Gênesis');
+                  setSelectedChapter('1');
+                  setSelectedStartVerse('');
+                  setSelectedEndVerse('');
+                }}
+                className="bg-white border border-slate-200 text-slate-600 px-4 py-1.5 text-sm rounded-lg font-medium hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center whitespace-nowrap"
               >
                 Limpar
               </button>
@@ -286,9 +384,9 @@ export default function App() {
         </div>
 
         {/* Board Section */}
-        <div id="board-section" className="flex-1 overflow-y-auto bg-slate-50 relative">
+        <div id="board-section" className="flex-1 flex flex-col min-h-0 bg-slate-50 relative">
           <ErrorBoundary>
-            <ArcingBoard propositions={propositions} nodes={arcNodes} setNodes={handleSetArcNodes} />
+            <ArcingBoard propositions={propositions} setPropositions={handleSetPropositions} nodes={arcNodes} setNodes={handleSetArcNodes} />
           </ErrorBoundary>
         </div>
       </main>

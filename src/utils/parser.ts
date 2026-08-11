@@ -1,15 +1,18 @@
 import { sortedConnectives, connectiveMap, Relation } from './relations';
 
+export interface ConnectiveMatch {
+  word: string;
+  index: number;
+  relations: Relation[];
+}
+
 export interface Proposition {
   id: string;
   text: string;
   originalText: string;
   hint?: string;
-  connectiveMatch?: {
-    word: string;
-    index: number;
-    relations: Relation[];
-  };
+  connectiveMatch?: ConnectiveMatch;
+  connectiveMatches?: ConnectiveMatch[];
 }
 
 export function parseText(text: string): Proposition[] {
@@ -106,41 +109,67 @@ export function parseText(text: string): Proposition[] {
   return propositions;
 }
 
-function addProposition(propositions: Proposition[], text: string, vCount: number, sCount: number) {
-  let id = `${vCount}${String.fromCharCode(97 + sCount)}`;
-  let connMatch = undefined;
+export function findConnectives(text: string) {
   let cleanText = text.trim();
   let lowerText = cleanText.toLowerCase();
   
+  let matches: ConnectiveMatch[] = [];
+  
+  // To avoid overlapping matches, we could search for all occurrences of all connectives,
+  // then sort by index, and filter out overlapping ones.
+  // sortedConnectives are already sorted by length descending in relations.ts (presumably, or we should sort them).
+  
   for (const conn of sortedConnectives) {
-    const escapedConn = conn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp('(^|\\s|\\b(?<!-))(' + escapedConn + ')(?!-)(?:\\b|\\s|[,.;:?!]|$)', 'i');
-    const match = lowerText.match(regex);
+    const escapedConn = conn.replace(/[.*+?^\$\{\}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp('(^|\\s|\\b(?<!-))(' + escapedConn + ')(?!-)(?:\\b|\\s|[,.;:?!]|$)', 'gi');
     
-    if (match) {
-      const matchIndex = match.index! + match[1].length;
+    let match;
+    while ((match = regex.exec(lowerText)) !== null) {
+      const matchIndex = match.index + match[1].length;
       const matchWord = match[2];
-      let relations = connectiveMap.get(conn)!;
-      connMatch = {
-        word: cleanText.substring(matchIndex, matchIndex + matchWord.length),
-        index: matchIndex,
-        relations
-      };
-      break;
+      
+      // Check if this overlaps with an existing match
+      const overlaps = matches.some(m => 
+        (matchIndex >= m.index && matchIndex < m.index + m.word.length) ||
+        (matchIndex + matchWord.length > m.index && matchIndex + matchWord.length <= m.index + m.word.length) ||
+        (matchIndex <= m.index && matchIndex + matchWord.length >= m.index + m.word.length)
+      );
+      
+      if (!overlaps) {
+        matches.push({
+          word: cleanText.substring(matchIndex, matchIndex + matchWord.length),
+          index: matchIndex,
+          relations: connectiveMap.get(conn)!
+        });
+      }
     }
   }
   
+  matches.sort((a, b) => a.index - b.index);
+  
   let hint = undefined;
-  if (connMatch && connMatch.relations.length > 0) {
-    const rel = connMatch.relations[0];
-    hint = `Dica de análise gramatical:\n\nA palavra '${connMatch.word}' geralmente introduz uma relação de ${rel.name} (${rel.category}).\n\nTente agrupar esta proposição com a(s) proposição(ões) anterior(es) que formam a ação ou declaração principal à qual este conectivo se refere.`;
+  if (matches.length > 0) {
+    const firstRel = matches[0].relations[0];
+    if (firstRel) {
+      hint = `Dica de análise gramatical:\n\nA palavra '${matches[0].word}' geralmente introduz uma relação de ${firstRel.name} (${firstRel.category}).\n\nTente agrupar esta proposição com a(s) proposição(ões) anterior(es) que formam a ação ou declaração principal à qual este conectivo se refere.`;
+    }
   }
+  
+  return { matches, hint };
+}
+
+function addProposition(propositions: Proposition[], text: string, vCount: number, sCount: number) {
+  let id = `${vCount}${String.fromCharCode(97 + sCount)}`;
+  let cleanText = text.trim();
+  
+  const { matches, hint } = findConnectives(cleanText);
   
   propositions.push({
     id,
     text: cleanText,
     originalText: cleanText,
     hint,
-    connectiveMatch: connMatch
+    connectiveMatch: matches.length > 0 ? matches[0] : undefined,
+    connectiveMatches: matches
   });
 }
