@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Proposition } from '../utils/parser';
 import { ArcNodeData } from '../types';
-import { Plus, Trash2, SplitSquareHorizontal, ChevronDown, X } from 'lucide-react';
+import { Plus, Trash2, SplitSquareHorizontal, ChevronDown, X, Scissors, Link2 } from 'lucide-react';
 import { relations } from '../utils/relations';
 import { HintPopup } from './HintPopup';
 
@@ -114,6 +114,7 @@ function RelationPicker({ onSelect, onClose }: { onSelect: (id: string) => void,
 
 interface ArcingBoardProps {
   propositions: Proposition[];
+  setPropositions: React.Dispatch<React.SetStateAction<Proposition[]>>;
   nodes: ArcNodeData[];
   setNodes: React.Dispatch<React.SetStateAction<ArcNodeData[]>>;
 }
@@ -133,7 +134,12 @@ const ArcNodeComponent: React.FC<{
   leafWidth: number,
   propositions: Proposition[],
   selectedBoundary: number | null,
-  onBoundaryClick: (index: number) => void
+  onBoundaryClick: (index: number) => void,
+  onSplit?: (id: string, offset: number) => void,
+  onMerge?: (id: string) => void,
+  mergeTarget?: string | null,
+  touchMode?: 'split' | 'merge' | null,
+  setTouchMode?: (val: 'split' | 'merge' | null) => void
 }> = ({ 
   node, 
   onUngroup, 
@@ -143,10 +149,42 @@ const ArcNodeComponent: React.FC<{
   leafWidth,
   propositions,
   selectedBoundary,
-  onBoundaryClick
+  onBoundaryClick,
+  onSplit,
+  onMerge,
+  mergeTarget,
+  touchMode,
+  setTouchMode
 }) => {
   const anchorRef = useRef<HTMLDivElement>(null);
+  const textContainerRef = useRef<HTMLDivElement>(null);
   const connectiveRef = useRef<HTMLSpanElement>(null);
+
+  const getCaretOffset = (e: React.MouseEvent, container: HTMLElement): number | null => {
+    try {
+      let range;
+      if (document.caretRangeFromPoint) {
+        range = document.caretRangeFromPoint(e.clientX, e.clientY);
+      } else if ((document as any).caretPositionFromPoint) {
+        const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos) {
+          range = document.createRange();
+          range.setStart(pos.offsetNode, pos.offset);
+        }
+      }
+      if (!range) return null;
+
+      if (!container.contains(range.startContainer)) return null;
+
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(container);
+      preCaretRange.setEnd(range.startContainer, range.startOffset);
+      return preCaretRange.toString().length;
+    } catch (err) {
+      console.error('getCaretOffset error', err);
+      return null;
+    }
+  };
 
   const isPopupActiveInSubtree = (n: ArcNodeData): boolean => {
     if (activePopup === n.id || activePopup === `conn-${n.proposition?.id}` || activePopup === `hint-${n.proposition?.id}`) return true;
@@ -166,11 +204,40 @@ const ArcNodeComponent: React.FC<{
       <div className={`flex items-stretch -mb-px ${hasActivePopup ? 'relative z-50' : ''}`}>
         <div 
           ref={anchorRef}
-          onClick={(e) => {
-            e.stopPropagation();
-            setActivePopup(activePopup === `hint-${prop.id}` ? null : `hint-${prop.id}`);
+          onMouseDown={(e) => {
+            const isSplit = e.ctrlKey || e.metaKey || touchMode === 'split';
+            const isMerge = e.shiftKey || touchMode === 'merge';
+            if (isSplit || isMerge) {
+              e.preventDefault(); // Prevent text selection
+            }
           }}
-          className={`relative border border-slate-200 bg-white p-3 flex items-start shrink-0 transition-all duration-300 cursor-pointer hover:bg-slate-50 ${activePopup === 'conn-' + prop.id || activePopup === 'hint-' + prop.id ? 'z-50 ring-2 ring-indigo-500/20' : 'z-10'}`}
+          onClick={(e) => {
+            const isSplit = e.ctrlKey || e.metaKey || touchMode === 'split';
+            const isMerge = e.shiftKey || touchMode === 'merge';
+            e.stopPropagation();
+
+            if (isMerge && onMerge) {
+              console.log('Merge Clicked!', { propId: prop.id });
+              onMerge(prop.id);
+              return;
+            }
+            if (isSplit && onSplit && textContainerRef.current) {
+              const offset = getCaretOffset(e, textContainerRef.current);
+              console.log('Split Clicked!', { propId: prop.id, offset, textLen: prop.text.length });
+              if (offset !== null && offset > 0 && offset < prop.text.length) {
+                onSplit(prop.id, offset);
+              } else {
+                console.log('Offset invalid or out of bounds');
+              }
+              return;
+            }
+
+            // Normal click
+            if (!isSplit && !isMerge) {
+              setActivePopup(activePopup === `hint-${prop.id}` ? null : `hint-${prop.id}`);
+            }
+          }}
+          className={`relative border ${mergeTarget === prop.id ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-slate-200 bg-white'} p-3 flex items-start shrink-0 transition-all duration-300 cursor-pointer hover:bg-slate-50 ${activePopup === 'conn-' + prop.id || activePopup === 'hint-' + prop.id ? 'z-50 ring-2 ring-indigo-500/20' : 'z-10'}`}
           style={{ width: leafWidth }}
         >
           {activePopup === `hint-${prop.id}` && (
@@ -183,7 +250,7 @@ const ArcNodeComponent: React.FC<{
           <span className="text-xs font-mono font-bold text-amber-500 mr-3 mt-0.5 shrink-0 select-none">
             {prop.id}
           </span>
-          <div className="text-slate-700 font-sans text-sm leading-relaxed flex-1">
+          <div ref={textContainerRef} className="text-slate-700 font-sans text-sm leading-relaxed flex-1 prop-text-container">
             {prop.connectiveMatch ? (
               (() => {
                 const word = prop.connectiveMatch.word;
@@ -271,6 +338,9 @@ const ArcNodeComponent: React.FC<{
               propositions={propositions}
               selectedBoundary={selectedBoundary}
               onBoundaryClick={onBoundaryClick}
+              onSplit={onSplit}
+              onMerge={onMerge}
+              mergeTarget={mergeTarget}
             />
           ))}
         </div>
@@ -345,10 +415,168 @@ const ArcNodeComponent: React.FC<{
   );
 }
 
-export function ArcingBoard({ propositions, nodes, setNodes }: ArcingBoardProps) {
+export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: ArcingBoardProps) {
   const [activePopup, setActivePopup] = useState<string | null>(null);
   const [leafWidth, setLeafWidth] = useState<number>(400);
   const [selectedBoundary, setSelectedBoundary] = useState<number | null>(null);
+  const [mergeTarget, setMergeTarget] = useState<string | null>(null);
+  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+  const [touchMode, setTouchMode] = useState<'split' | 'merge' | null>(null);
+  const [history, setHistory] = useState<Proposition[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const lastModifiedByUs = useRef<Proposition[] | null>(null);
+
+  useEffect(() => {
+    if (propositions !== lastModifiedByUs.current && propositions.length > 0) {
+      setHistory([propositions]);
+      setHistoryIndex(0);
+      lastModifiedByUs.current = propositions;
+    }
+  }, [propositions]);
+
+  const updatePropositions = (newArr: Proposition[]) => {
+    lastModifiedByUs.current = newArr;
+    setPropositions(newArr);
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      return [...newHistory, newArr];
+    });
+    setHistoryIndex(prev => prev + 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      lastModifiedByUs.current = history[newIndex];
+      setPropositions(history[newIndex]);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      lastModifiedByUs.current = history[newIndex];
+      setPropositions(history[newIndex]);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control') setIsCtrlPressed(true);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') setIsCtrlPressed(false);
+    };
+    const handleBlur = () => {
+      setIsCtrlPressed(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  const handleSplitProposition = (propId: string, splitIndex: number) => {
+    const prev = propositions;
+    const idx = prev.findIndex(p => p.id === propId);
+    if (idx === -1) return;
+    const p = prev[idx];
+    
+    // Snap to nearest space to avoid breaking words
+    let bestSplitIndex = splitIndex;
+    if (p.text[splitIndex] !== ' ' && splitIndex > 0 && splitIndex < p.text.length) {
+      const prevSpace = p.text.lastIndexOf(' ', splitIndex);
+      const nextSpace = p.text.indexOf(' ', splitIndex);
+      
+      if (prevSpace !== -1 && nextSpace !== -1) {
+        bestSplitIndex = (splitIndex - prevSpace <= nextSpace - splitIndex) ? prevSpace : nextSpace;
+      } else if (prevSpace !== -1) {
+        bestSplitIndex = prevSpace;
+      } else if (nextSpace !== -1) {
+        bestSplitIndex = nextSpace;
+      }
+    }
+    
+    const t1 = p.text.substring(0, bestSplitIndex).trim();
+    const t2 = p.text.substring(bestSplitIndex).trim();
+    if (!t1 || !t2) return;
+
+    const match = p.id.match(/^(\d+)([a-z]*)$/);
+    const baseNum = match ? match[1] : p.id;
+    
+    const newP1 = { ...p, id: p.id + '_a', text: t1, originalText: t1, connectiveMatch: undefined, hint: undefined };
+    const newP2 = { ...p, id: p.id + '_b', text: t2, originalText: t2, connectiveMatch: undefined, hint: undefined };
+    
+    const newArr = [...prev];
+    newArr.splice(idx, 1, newP1, newP2);
+    
+    let subCounter = 0;
+    for (let i = 0; i < newArr.length; i++) {
+      const m = newArr[i].id.match(/^(\d+)/);
+      if (m && m[1] === baseNum) {
+        newArr[i] = { ...newArr[i], id: `${baseNum}${String.fromCharCode(97 + subCounter)}` };
+        subCounter++;
+      }
+    }
+    updatePropositions(newArr);
+  };
+
+  const handleMergePropositions = (propId2: string) => {
+    if (!mergeTarget) {
+       setMergeTarget(propId2);
+       return;
+    }
+    if (mergeTarget === propId2) {
+       setMergeTarget(null);
+       return;
+    }
+    
+    const prev = propositions;
+    const idx1 = prev.findIndex(p => p.id === mergeTarget);
+    const idx2 = prev.findIndex(p => p.id === propId2);
+    
+    if (idx1 === -1 || idx2 === -1) {
+       setMergeTarget(null);
+       return;
+    }
+    
+    const firstIdx = Math.min(idx1, idx2);
+    const secondIdx = Math.max(idx1, idx2);
+    
+    if (secondIdx - firstIdx !== 1) {
+       setMergeTarget(null);
+       return; 
+    }
+
+    const p1 = prev[firstIdx];
+    const p2 = prev[secondIdx];
+    
+    const match = p1.id.match(/^(\d+)([a-z]*)$/);
+    const baseNum = match ? match[1] : p1.id;
+    
+    const newP = { ...p1, text: p1.text + " " + p2.text, originalText: p1.originalText + " " + p2.originalText, connectiveMatch: undefined, hint: undefined };
+    
+    const newArr = [...prev];
+    newArr.splice(firstIdx, 2, newP);
+    
+    let subCounter = 0;
+    for (let i = 0; i < newArr.length; i++) {
+      const m = newArr[i].id.match(/^(\d+)/);
+      if (m && m[1] === baseNum) {
+        newArr[i] = { ...newArr[i], id: `${baseNum}${String.fromCharCode(97 + subCounter)}` };
+        subCounter++;
+      }
+    }
+    
+    updatePropositions(newArr);
+    setMergeTarget(null);
+  };
 
   useEffect(() => {
     if (propositions.length === 0) return;
@@ -496,6 +724,12 @@ export function ArcingBoard({ propositions, nodes, setNodes }: ArcingBoardProps)
 
   return (
     <div className="flex flex-col flex-1 relative overflow-auto bg-slate-100">
+      <style>{`
+        .split-mode-active .prop-text-container,
+        .split-mode-active .prop-text-container * {
+          cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='24'%3E%3Ctext x='0' y='20' font-size='22' font-weight='bold' fill='%236366f1'%3E|%3C/text%3E%3C/svg%3E") 8 12, text !important;
+        }
+      `}</style>
       {/* Invisible measurer to determine optimal leaf width */}
       <div className="absolute top-0 left-0 invisible pointer-events-none opacity-0 z-[-1] overflow-hidden h-0 flex flex-col">
         {propositions.map(p => (
@@ -510,14 +744,49 @@ export function ArcingBoard({ propositions, nodes, setNodes }: ArcingBoardProps)
 
       <div className="sticky top-0 z-40 p-4 border-b bg-slate-50/90 backdrop-blur shrink-0 flex justify-between items-center shadow-sm">
         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Quadro de Arcos</span>
-        {nodes.length > 0 && (
-          <span className="text-[10px] font-bold uppercase text-indigo-500 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100">
-            {nodes.length} Blocos Restantes
-          </span>
-        )}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTouchMode(prev => prev === 'split' ? null : 'split')}
+              className={`p-1.5 rounded transition-colors ${touchMode === 'split' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}
+              title="Modo Dividir (Cortar proposição)"
+            >
+              <Scissors className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setTouchMode(prev => prev === 'merge' ? null : 'merge')}
+              className={`p-1.5 rounded transition-colors ${touchMode === 'merge' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}
+              title="Modo Unir (Mesclar proposições)"
+            >
+              <Link2 className="w-4 h-4" />
+            </button>
+            <div className="w-px h-4 bg-slate-300 mx-1"></div>
+            <button
+              onClick={handleUndo}
+              disabled={historyIndex <= 0}
+              className="text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-colors p-1"
+              title="Desfazer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={historyIndex >= history.length - 1}
+              className="text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-colors p-1"
+              title="Refazer"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
+            </button>
+          </div>
+          {nodes.length > 0 && (
+            <span className="text-[10px] font-bold uppercase text-indigo-500 bg-indigo-50 px-2 py-1 rounded-full border border-indigo-100">
+              {nodes.length} Blocos Restantes
+            </span>
+          )}
+        </div>
       </div>
       
-      <div className={`flex-1 p-8 min-w-max pb-64 ${selectedBoundary !== null ? 'cursor-crosshair' : ''}`} onClick={() => setActivePopup(null)}>
+      <div className={`flex-1 p-8 min-w-max pb-64 ${selectedBoundary !== null ? 'cursor-crosshair' : ''} ${isCtrlPressed || touchMode === 'split' ? 'split-mode-active' : ''}`} onClick={() => { setActivePopup(null); setTouchMode(null); }}>
         {nodes.length === 0 ? (
            <div className="text-slate-400 text-sm text-center mt-20">
              Segmentos aparecerão aqui para serem arqueados.
@@ -550,6 +819,11 @@ export function ArcingBoard({ propositions, nodes, setNodes }: ArcingBoardProps)
                    propositions={propositions}
                    selectedBoundary={selectedBoundary}
                    onBoundaryClick={handleBoundaryClick}
+                   onSplit={handleSplitProposition}
+                   onMerge={handleMergePropositions}
+                   mergeTarget={mergeTarget}
+                   touchMode={touchMode}
+                   setTouchMode={setTouchMode}
                  />
                </div>
              )})}
