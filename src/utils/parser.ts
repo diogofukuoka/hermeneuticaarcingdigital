@@ -55,6 +55,8 @@ export function parseText(text: string): Proposition[] {
 
   let autoText = cleaned;
   
+  autoText = autoText.replace(/(\S)\s+(\[\d+\]\s+)/g, '$1\n$2');
+  
   autoText = autoText.replace(/([.;:?])\s+/g, '$1\n');
   
   const afterCommaConnectives = sortedConnectives.map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');

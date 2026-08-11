@@ -1,0 +1,3 @@
+import { parseText } from './src/utils/parser.ts';
+const text = "[1] Portanto, se há algum conforto em Cristo, se alguma consolação de amor, se alguma comunhão no Espírito, se alguns entranháveis afetos e compaixões, [2] Completai o meu gozo, para que sintais o mesmo, tendo o mesmo amor, o mesmo ânimo, sentindo uma mesma coisa. [3] Nada façais por contenda ou por vanglória, mas por humildade; cada um considere os outros superiores a si mesmo. [4] Não atente cada um para o que é propriamente seu, mas cada qual também para o que é dos outros. [5] De sorte que haja em vós o mesmo sentimento que houve também em Cristo Jesus,";
+console.log(JSON.stringify(parseText(text), null, 2));

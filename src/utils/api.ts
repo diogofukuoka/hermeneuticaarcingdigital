@@ -42,7 +42,7 @@ export async function fetchBibleText(reference: string): Promise<string | null> 
     }
     
     // Clean up HTML tags (e.g. <i>, </i>) and include verse numbers
-    const text = filtered.map(v => `${v.verse} ${v.text.replace(/<[^>]+>/g, '')}`).join(' ');
+    const text = filtered.map(v => `[${v.verse}] ${v.text.replace(/<[^>]+>/g, '')}`).join(' ');
     return text || null;
   } catch (err) {
     console.error('Failed to fetch bible reference:', err);
