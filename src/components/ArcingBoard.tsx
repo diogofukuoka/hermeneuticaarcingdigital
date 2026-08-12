@@ -502,7 +502,7 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
             propId,
             start,
             text,
-            top: rect.top - 36,
+            top: rect.bottom + 8,
             left: rect.left + (rect.width / 2)
           });
         } else {
