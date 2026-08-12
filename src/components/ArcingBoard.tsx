@@ -67,7 +67,7 @@ function ConnectivePopup({ connectiveMatch, anchorEl, onRemove }: { connectiveMa
   );
 }
 
-function RelationPicker({ onSelect, onClose }: { onSelect: (id: string) => void, onClose: () => void }) {
+function RelationPicker({ onSelect, onClose, onRemove }: { onSelect: (id: string) => void, onClose: () => void, onRemove?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [maxHeight, setMaxHeight] = useState('400px');
 
@@ -92,6 +92,17 @@ function RelationPicker({ onSelect, onClose }: { onSelect: (id: string) => void,
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
+      {onRemove && (
+        <div className="p-2 border-b border-slate-100 bg-red-50/30">
+          <button 
+            onClick={() => { onRemove(); onClose(); }}
+            className="w-full text-left px-2 py-1.5 hover:bg-red-100 rounded-md group flex items-center gap-2 transition-colors text-red-600"
+          >
+            <SplitSquareHorizontal className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-semibold">Remover Arco (Desagrupar)</span>
+          </button>
+        </div>
+      )}
       <div className="overflow-y-auto p-2">
         {Object.entries(groupedRelations).map(([category, rels]) => (
           <div key={category} className="mb-4 last:mb-1">
@@ -424,6 +435,7 @@ const ArcNodeComponent: React.FC<{
                <RelationPicker 
                  onSelect={(relId) => { onRelationChange(node.id, relId); setActivePopup(null); }}
                  onClose={() => setActivePopup(null)}
+                 onRemove={() => { onUngroup(node.id); setActivePopup(null); }}
                />
             )}
           </div>
@@ -713,20 +725,44 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
     const newArr = [...prev];
     newArr.splice(idx, 1, newP1, newP2);
     
+    const idMapping = new Map<string, string>();
     let subCounter = 0;
     for (let i = 0; i < newArr.length; i++) {
       const m = newArr[i].id.match(/^(\d+)/);
       if (m && m[1] === baseNum) {
-        newArr[i] = { ...newArr[i], id: `${baseNum}${String.fromCharCode(97 + subCounter)}` };
+        const oldId = newArr[i].id;
+        const newId = `${baseNum}${String.fromCharCode(97 + subCounter)}`;
+        if (oldId !== newId) idMapping.set(oldId, newId);
+        newArr[i] = { ...newArr[i], id: newId };
         subCounter++;
       }
     }
     
-    // Update nodes tree
+    const applyIdMapping = (nodesList: ArcNodeData[]): ArcNodeData[] => {
+      return nodesList.map(n => {
+        let newNode = { ...n };
+        if (newNode.type === 'leaf' && newNode.proposition) {
+          const mappedId = idMapping.get(newNode.proposition.id) || newNode.proposition.id;
+          newNode.id = mappedId;
+          const updatedProp = newArr.find(pr => pr.id === mappedId);
+          if (updatedProp) {
+            newNode.proposition = updatedProp;
+          }
+        }
+        if (newNode.children) {
+          newNode.children = applyIdMapping(newNode.children);
+        }
+        return newNode;
+      });
+    };
+
+    // Replace the leaf first with the temp old IDs
     const newP1Leaf = { id: newP1.id, type: 'leaf', proposition: newP1 } as ArcNodeData;
     const newP2Leaf = { id: newP2.id, type: 'leaf', proposition: newP2 } as ArcNodeData;
     let newNodes = replaceLeaf(nodes, p.id, [newP1Leaf, newP2Leaf]);
-    newNodes = rebindTree(newNodes, newArr);
+    
+    // Now rewrite all IDs across the tree
+    newNodes = applyIdMapping(newNodes);
     
     updateState(newArr, newNodes);
   };
@@ -771,19 +807,40 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
     const newArr = [...prev];
     newArr.splice(firstIdx, 2, newP);
     
+    const idMapping = new Map<string, string>();
     let subCounter = 0;
     for (let i = 0; i < newArr.length; i++) {
       const m = newArr[i].id.match(/^(\d+)/);
       if (m && m[1] === baseNum) {
-        newArr[i] = { ...newArr[i], id: `${baseNum}${String.fromCharCode(97 + subCounter)}` };
+        const oldId = newArr[i].id;
+        const newId = `${baseNum}${String.fromCharCode(97 + subCounter)}`;
+        if (oldId !== newId) idMapping.set(oldId, newId);
+        newArr[i] = { ...newArr[i], id: newId };
         subCounter++;
       }
     }
     
-    // Update nodes tree
+    const applyIdMapping = (nodesList: ArcNodeData[]): ArcNodeData[] => {
+      return nodesList.map(n => {
+        let newNode = { ...n };
+        if (newNode.type === 'leaf' && newNode.proposition) {
+          const mappedId = idMapping.get(newNode.proposition.id) || newNode.proposition.id;
+          newNode.id = mappedId;
+          const updatedProp = newArr.find(pr => pr.id === mappedId);
+          if (updatedProp) {
+            newNode.proposition = updatedProp;
+          }
+        }
+        if (newNode.children) {
+          newNode.children = applyIdMapping(newNode.children);
+        }
+        return newNode;
+      });
+    };
+
     let newNodes = replaceLeaf(nodes, p1.id, [{ id: newP.id, type: 'leaf', proposition: newP } as ArcNodeData]);
     newNodes = removeLeaf(newNodes, p2.id);
-    newNodes = rebindTree(newNodes, newArr);
+    newNodes = applyIdMapping(newNodes);
     
     updateState(newArr, newNodes);
     setMergeTarget(null);
