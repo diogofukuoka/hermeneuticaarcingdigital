@@ -470,11 +470,11 @@ export default function App() {
           </div>
           {showAiPanel && (propositions.length > 0 || isAnalyzingFull) && (
             <div 
-              className="w-full h-1/2 lg:h-full border-t lg:border-t-0 lg:border-l border-slate-200 bg-white shrink-0 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-40 relative flex flex-col"
+              className="ai-panel-dynamic w-full h-1/2 lg:h-full border-t lg:border-t-0 lg:border-l border-slate-200 bg-white shrink-0 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-40 relative flex flex-col"
               style={{ '--ai-panel-w': `${aiPanelWidth}px` } as React.CSSProperties}
             >
-              <style>{ `@media (min-width: 1024px) { .ai-panel-dynamic { width: var(--ai-panel-w); } }` }</style>
-              <div className="ai-panel-dynamic flex-1 h-full flex flex-col w-full min-w-0">
+              <style>{ `@media (min-width: 1024px) { .ai-panel-dynamic { width: var(--ai-panel-w) !important; max-width: var(--ai-panel-w) !important; flex: 0 0 var(--ai-panel-w) !important; } }` }</style>
+              <div className="flex-1 h-full flex flex-col w-full min-w-0">
                 {/* Drag Handle */}
                 <div 
                   className="hidden lg:block absolute left-0 top-0 bottom-0 w-3 -ml-1.5 cursor-col-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
