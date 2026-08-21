@@ -11,6 +11,7 @@ import { bibleBooks as _ignore } from './utils/bible';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RelationsGuide } from './components/RelationsGuide';
 import { SavedAnalysesModal } from './components/SavedAnalysesModal';
+import { AiAnalysisPanel } from './components/AiAnalysisPanel';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
 import { BookOpen, Save, FolderOpen, FilePlus2 } from 'lucide-react';
@@ -32,6 +33,34 @@ export default function App() {
   const [selectedEndVerse, setSelectedEndVerse] = useState('');
   const [savedItems, setSavedItems] = useState<SavedAnalysis[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [aiAnalysisText, setAiAnalysisText] = useState<string | null>(null);
+  const [isAnalyzingFull, setIsAnalyzingFull] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiPanelWidth, setAiPanelWidth] = useState(850);
+  const isDragging = React.useRef(false);
+
+  React.useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging.current) return;
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth > 350 && newWidth < window.innerWidth - 300) {
+        setAiPanelWidth(newWidth);
+      }
+    };
+    const handleMouseUp = () => {
+      if (isDragging.current) {
+        isDragging.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
   const [activePicker, setActivePicker] = useState<'chapter' | 'startVerse' | 'endVerse' | null>(null);
   
   const chapterBtnRef = React.useRef<HTMLButtonElement>(null);
@@ -56,6 +85,7 @@ export default function App() {
           text: data.text || '',
           propositions: data.propositions ? JSON.parse(data.propositions) : undefined,
           arcNodes: data.arcNodes ? JSON.parse(data.arcNodes) : undefined,
+          aiAnalysisText: data.aiAnalysisText,
           updatedAt: data.updatedAt || 0
         });
       });
@@ -144,6 +174,7 @@ export default function App() {
       text: text,
       propositions: JSON.stringify(propositions),
       arcNodes: JSON.stringify(arcNodes),
+      aiAnalysisText: aiAnalysisText,
       updatedAt: Date.now()
     }, { merge: true }).then(() => {
       if (!currentId) {
@@ -159,6 +190,13 @@ export default function App() {
     setText(item.text || '');
     setArcNodes(item.arcNodes || []);
     setPropositions(item.propositions || parseText(item.text || ''));
+    if (item.aiAnalysisText) {
+      setAiAnalysisText(item.aiAnalysisText);
+      setShowAiPanel(true);
+    } else {
+      setAiAnalysisText(null);
+      setShowAiPanel(false);
+    }
     setIsSavedModalOpen(false);
     setTimeout(() => {
       document.getElementById('board-section')?.scrollIntoView({ behavior: 'smooth' });
@@ -182,6 +220,8 @@ export default function App() {
     setText('');
     setArcNodes([]);
     setPropositions([]);
+    setAiAnalysisText(null);
+    setShowAiPanel(false);
   };
 
   const handleAnalyze = async () => {
@@ -227,6 +267,42 @@ export default function App() {
     setPropositions(parsed);
     if (currentId) updateRemote({ text: textToParse, propositions: JSON.stringify(parsed) as any, title: newTitle });
     setIsAnalyzing(false);
+    
+    // Async call for Full Analysis
+    setAiAnalysisText(null);
+    setIsAnalyzingFull(true);
+    setShowAiPanel(true);
+    
+    fetch('/api/full-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: textToParse })
+    })
+    .then(async res => {
+      if (!res.body) throw new Error("No response body");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      
+      setAiAnalysisText(""); // clear and get ready for chunks
+      setIsAnalyzingFull(false); // remove the loading spinner immediately
+      
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          if (currentId) updateRemote({ aiAnalysisText: fullText });
+          break;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        setAiAnalysisText(prev => (prev || "") + chunk);
+      }
+    })
+    .catch(err => {
+      console.error("Failed to fetch full analysis:", err);
+      setAiAnalysisText("Erro ao processar análise avançada com a IA.");
+      setIsAnalyzingFull(false);
+    });
   };
 
   return (
@@ -374,6 +450,8 @@ export default function App() {
                   setSelectedChapter('1');
                   setSelectedStartVerse('');
                   setSelectedEndVerse('');
+                  setShowAiPanel(false);
+                  setAiAnalysisText(null);
                 }}
                 className="bg-white border border-slate-200 text-slate-600 px-4 py-1.5 text-sm rounded-lg font-medium hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center whitespace-nowrap"
               >
@@ -384,10 +462,37 @@ export default function App() {
         </div>
 
         {/* Board Section */}
-        <div id="board-section" className="flex-1 flex flex-col min-h-0 bg-slate-50 relative">
-          <ErrorBoundary>
-            <ArcingBoard propositions={propositions} setPropositions={handleSetPropositions} nodes={arcNodes} setNodes={handleSetArcNodes} />
-          </ErrorBoundary>
+        <div id="board-section" className="flex-1 flex flex-col lg:flex-row min-h-0 bg-slate-50 relative overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 relative">
+            <ErrorBoundary>
+              <ArcingBoard propositions={propositions} setPropositions={handleSetPropositions} nodes={arcNodes} setNodes={handleSetArcNodes} />
+            </ErrorBoundary>
+          </div>
+          {showAiPanel && (propositions.length > 0 || isAnalyzingFull) && (
+            <div 
+              className="w-full h-1/2 lg:h-full border-t lg:border-t-0 lg:border-l border-slate-200 bg-white shrink-0 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-40 relative flex flex-col"
+              style={{ '--ai-panel-w': `${aiPanelWidth}px` } as React.CSSProperties}
+            >
+              <style>{ `@media (min-width: 1024px) { .ai-panel-dynamic { width: var(--ai-panel-w); } }` }</style>
+              <div className="ai-panel-dynamic flex-1 h-full flex flex-col w-full min-w-0">
+                {/* Drag Handle */}
+                <div 
+                  className="hidden lg:block absolute left-0 top-0 bottom-0 w-3 -ml-1.5 cursor-col-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    isDragging.current = true;
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                  }}
+                />
+                <AiAnalysisPanel 
+                  content={aiAnalysisText} 
+                  isLoading={isAnalyzingFull} 
+                  onClose={() => setShowAiPanel(false)}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

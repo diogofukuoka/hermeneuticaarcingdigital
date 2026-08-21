@@ -25,5 +25,6 @@ export interface SavedAnalysis {
   propositions?: any[];
   strokes?: Stroke[];
   arcNodes?: ArcNodeData[];
+  aiAnalysisText?: string;
   updatedAt: number;
 }
