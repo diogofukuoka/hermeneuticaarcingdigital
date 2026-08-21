@@ -41,32 +41,41 @@ export default function App() {
   const isDragging = React.useRef<'width' | 'height' | false>(false);
 
   React.useEffect(() => {
-    const handleMouseMove = (e) => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging.current) return;
+      if (e.cancelable) e.preventDefault();
+      
+      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+      
       if (isDragging.current === 'width') {
-        const newWidth = window.innerWidth - e.clientX;
+        const newWidth = window.innerWidth - clientX;
         if (newWidth > 350 && newWidth < window.innerWidth - 100) {
           setAiPanelWidth(newWidth);
         }
       } else if (isDragging.current === 'height') {
-        const newHeight = window.innerHeight - e.clientY;
+        const newHeight = window.innerHeight - clientY;
         if (newHeight > 200 && newHeight < window.innerHeight - 150) {
           setAiPanelHeight(newHeight);
         }
       }
     };
-    const handleMouseUp = () => {
+    const handleUp = () => {
       if (isDragging.current) {
         isDragging.current = false;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
       }
     };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleUp);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleUp);
     };
   }, []);
   const [activePicker, setActivePicker] = useState<'chapter' | 'startVerse' | 'endVerse' | null>(null);
@@ -492,21 +501,29 @@ export default function App() {
               <div className="flex-1 h-full flex flex-col w-full min-w-0">
                 {/* Desktop Drag Handle (Width) */}
                 <div 
-                  className="hidden lg:block absolute left-0 top-0 bottom-0 w-3 -ml-1.5 cursor-col-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
+                  className="hidden lg:block absolute left-0 top-0 bottom-0 w-4 -ml-2 cursor-col-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     isDragging.current = 'width';
                     document.body.style.cursor = 'col-resize';
                     document.body.style.userSelect = 'none';
                   }}
+                  onTouchStart={(e) => {
+                    isDragging.current = 'width';
+                    document.body.style.userSelect = 'none';
+                  }}
                 />
                 {/* Mobile/Tablet Drag Handle (Height) */}
                 <div 
-                  className="lg:hidden absolute left-0 right-0 top-0 h-3 -mt-1.5 cursor-row-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
+                  className="lg:hidden absolute left-0 right-0 top-0 h-4 -mt-2 cursor-row-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     isDragging.current = 'height';
                     document.body.style.cursor = 'row-resize';
+                    document.body.style.userSelect = 'none';
+                  }}
+                  onTouchStart={(e) => {
+                    isDragging.current = 'height';
                     document.body.style.userSelect = 'none';
                   }}
                 />
