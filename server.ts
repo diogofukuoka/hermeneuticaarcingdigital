@@ -166,7 +166,7 @@ Você deve classificar as conexões estritamente dentro das dezoito relações c
 Sua resposta deve ser estruturada e visualmente rica, contendo exatamente as 4 seções a seguir:
 
 #### 1. TEXTO SEGMENTADO (A "LINHA DE TERRA")
-Apresente o texto dividido em proposições numeradas (1a, 1b, 2a, etc.), com os conectivos sintáticos e conjunções de teste destacados em **NEGRITO E MAIÚSCULO**.
+Apresente o texto dividido em proposições numeradas seguindo rigorosamente a numeração do versículo de origem (ex: se o texto for do versículo 19, rotule como 19a, 19b, 19c, etc.), com os conectivos sintáticos e conjunções de teste destacados em **NEGRITO E MAIÚSCULO**.
 
 #### 2. ÁRVORE DE CONEXÕES RECURSIVAS (Passo a Passo dos Arcos)
 
