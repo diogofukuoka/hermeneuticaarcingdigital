@@ -376,7 +376,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
+    <div className="flex flex-col fixed inset-0 bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <header className="h-14 border-b bg-white flex items-center justify-between px-6 shrink-0 z-50">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-lg shadow-sm flex items-center justify-center text-white ring-1 ring-indigo-900/10">

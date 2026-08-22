@@ -19,8 +19,13 @@ export const googleProvider = new GoogleAuthProvider();
 export const loginWithGoogle = async () => {
   try {
     await signInWithPopup(auth, googleProvider);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login failed", error);
+    if (error?.code === 'auth/unauthorized-domain') {
+      alert("🔒 Domínio Não Autorizado\n\nO Firebase bloqueou o login porque este domínio (ex: Vercel) não está na lista de domínios seguros.\n\nComo o Firebase atual é gerenciado pelo AI Studio, ele só aceita logins através do link oficial do AI Studio.\n\nPara usar na Vercel, crie um projeto gratuito no Firebase Console, adicione seu domínio da Vercel e substitua as chaves no arquivo firebase.ts.");
+    } else {
+      alert("Erro ao fazer login com o Google: " + (error?.message || "Erro desconhecido"));
+    }
     throw error;
   }
 };
