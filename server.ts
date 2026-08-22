@@ -95,7 +95,7 @@ ${text}
 `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -168,13 +168,34 @@ Sua resposta deve ser estruturada e visualmente rica, contendo exatamente as 4 s
 #### 1. TEXTO SEGMENTADO (A "LINHA DE TERRA")
 Apresente o texto dividido em proposições numeradas (1a, 1b, 2a, etc.), com os conectivos sintáticos e conjunções de teste destacados em **NEGRITO E MAIÚSCULO**.
 
-#### 2. ARVORE DE CONEXÕES RECURSIVAS (Passo a Passo dos Arcos)
-Descreva exatamente onde colocar cada arco de relação lógica, do começo ao fim, um a um, demonstrando visualmente o empilhamento das peças ativas em níveis:
-- **Nível 1 (Base):** Mostrar quais proposições vizinhas se unem e quem é o Ponto Principal (Main Point).
-- **Níveis Intermediários:** Mostrar a união dos blocos sobreviventes.
-- **Nível Topo (Arco Mestre):** A união final que abraça todo o texto.
+#### 2. ÁRVORE DE CONEXÕES RECURSIVAS (Passo a Passo dos Arcos)
 
-*Use diagramação textual em blocos/recuos markdown ou use linhas e colchetes (\`[ \]\`) para simular o desenho dos arcos.*
+Construa a árvore de conexões lógicas detalhando o passo a passo da formação dos arcos, do começo ao fim. 
+
+É **OBRIGATÓRIO** seguir ESTRITAMENTE a formatação de listas aninhadas (bullet points), recuos e a estrutura de campos exata do template abaixo. Use crases (\`) para destacar os blocos dos arcos resultantes.
+
+**Siga este padrão exato de formatação para a sua resposta:**
+
+*   **Nível 1 (Base):**
+    *   une ([id]) e ([id] ou bloco anterior)
+        *   Ponto Principal: ([id]) [Texto da proposição] (indicar se é MP de bloco anterior)
+        *   Suporte: ([id]) [Texto da proposição] (indicar se é MP de bloco anterior)
+        *   Relação: [Nome da Relação] ([Sigla])
+        *   Conjunção de Teste: ([id]) [CONJUNÇÃO] ([id])
+        *   Arco Resultante: \`[[id] < [Sigla] < [id]]\` (Ponto Principal: [id])
+    *(Repita essa estrutura para todas as uniões da base)*
+
+*   **Nível 2 (Intermediário):** *(Crie Níveis 3, 4, etc., se necessário)*
+    *   une o bloco \`[arco]\` e o bloco \`[arco]\`
+        *   Ponto Principal: ([id]) [Texto], (MP do bloco \`[arco]\`)
+        *   Suporte: ([id]) [Texto], (MP do bloco \`[arco]\`)
+        *   Relação: [Nome da Relação] ([Sigla])
+        *   Conjunção de Teste: ([id]) [CONJUNÇÃO] ([id])
+        *   Arco Resultante: \`[[arco 1] < [Sigla] < [arco 2]]\` (Ponto Principal: [id])
+
+*   **Nível Topo (Arco Mestre):**
+    *   O bloco final do Nível [X] é o Arco Mestre, e seu Ponto Principal é ([id]).
+    *   Arco Mestre: \`[[Arco completo abraçando todo o texto]]\`
 
 #### 3. TABELA EXEGÉTICA DE ATRIBUTOS LÓGICOS
 Crie uma tabela com as colunas:
@@ -192,7 +213,7 @@ ${text}
       res.setHeader('Transfer-Encoding', 'chunked');
 
       const responseStream = await ai.models.generateContentStream({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: prompt,
       });
 
@@ -204,7 +225,7 @@ ${text}
       res.end();
     } catch (error) {
       console.error("AI full analysis error:", error);
-      res.status(500).json({ error: "Failed to perform full analysis" });
+      res.status(500).json({ error: "Failed to perform full analysis", details: error.message || error.toString() });
     }
   });
 

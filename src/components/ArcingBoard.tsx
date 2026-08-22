@@ -360,7 +360,7 @@ const ArcNodeComponent: React.FC<{
 
   // Group node
   return (
-    <div className={`flex items-stretch -mb-px relative group/arc ${hasActivePopup ? 'z-50' : ''}`}>
+    <div className={`flex items-stretch -mb-px relative group/arc hover:z-[60] ${hasActivePopup ? 'z-50' : ''}`}>
       <div className="flex items-stretch relative shrink-0">
         <div className="flex flex-col items-stretch justify-center relative w-full gap-1">
           {node.children?.map((child) => (
@@ -401,7 +401,7 @@ const ArcNodeComponent: React.FC<{
           </div>
           
           {/* Relation Circle(s) */}
-          <div ref={anchorRef} className="relative z-10 flex flex-col items-center justify-center gap-2 translate-x-1/2">
+          <div ref={anchorRef} className="relative z-10 hover:z-[60] flex flex-col items-center justify-center gap-2 translate-x-1/2">
             {node.relation ? (() => {
                const relData = relations.find(r => r.id === node.relation);
                return (
@@ -1080,7 +1080,7 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
                };
                const hasActivePopup = isPopupActiveInSubtree(node);
                return (
-               <div key={node.id} className={`relative flex group/node ${hasActivePopup ? 'z-50' : 'z-10'}`}>
+               <div key={node.id} className={`relative flex group/node hover:z-[60] ${hasActivePopup ? 'z-50' : 'z-10'}`}>
                  <ArcNodeComponent 
                    node={node} 
                    onUngroup={handleUngroup}
