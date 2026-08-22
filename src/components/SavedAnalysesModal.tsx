@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SavedAnalysis } from '../types';
-import { X, Trash2, Clock, AlertTriangle } from 'lucide-react';
+import { X, Trash2, Clock, AlertTriangle, LogIn } from 'lucide-react';
+import { User } from 'firebase/auth';
 
 interface SavedAnalysesModalProps {
   isOpen: boolean;
@@ -8,9 +9,11 @@ interface SavedAnalysesModalProps {
   savedItems: SavedAnalysis[];
   onLoad: (item: SavedAnalysis) => void;
   onDelete: (id: string) => void;
+  user: User | null;
+  onLogin: () => void;
 }
 
-export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDelete }: SavedAnalysesModalProps) {
+export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDelete, user, onLogin }: SavedAnalysesModalProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -26,7 +29,22 @@ export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDele
         </div>
         
         <div className="p-4 flex-1 overflow-y-auto">
-          {savedItems.length === 0 ? (
+          {!user ? (
+            <div className="text-center py-12 text-slate-600 flex flex-col items-center">
+              <AlertTriangle className="w-12 h-12 text-amber-500 mb-4 opacity-80" />
+              <h3 className="text-lg font-bold mb-2">Login Necessário</h3>
+              <p className="mb-6 max-w-sm">
+                Você precisa estar conectado com sua conta Google para ver ou salvar análises na nuvem.
+              </p>
+              <button 
+                onClick={onLogin}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <LogIn className="w-5 h-5" />
+                Entrar com Google
+              </button>
+            </div>
+          ) : savedItems.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <p>Nenhuma análise salva ainda.</p>
             </div>

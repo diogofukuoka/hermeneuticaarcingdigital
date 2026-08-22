@@ -14,12 +14,14 @@ import { SavedAnalysesModal } from './components/SavedAnalysesModal';
 import { AiAnalysisPanel } from './components/AiAnalysisPanel';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
-import { BookOpen, Save, FolderOpen, FilePlus2 } from 'lucide-react';
+import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut } from 'lucide-react';
 import { SavedAnalysis, ArcNodeData } from './types';
-import { db } from './utils/firebase';
-import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
+import { db, auth, loginWithGoogle, logout } from './utils/firebase';
+import { collection, doc, onSnapshot, setDoc, deleteDoc, query, where } from 'firebase/firestore';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
   const [text, setText] = useState('');
   const [title, setTitle] = useState('Análise sem título');
   const [propositions, setPropositions] = useState<Proposition[]>([]);
@@ -89,10 +91,55 @@ export default function App() {
   const maxVerses = 176; // Psalm 119 has 176 verses
 
 
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Migrate legacy saved items that don't have a userId
+  useEffect(() => {
+    if (!user) return;
+    
+    const legacyIds = [
+      "0df0fabf-adb5-4870-a628-29a669dae226",
+      "3bed21f3-9031-4126-b533-b61170e88d1a",
+      "9efda57b-25ff-44c8-a250-a47db1fe5c36",
+      "ba739aca-b46d-4ab2-a909-4c61b7af15a2",
+      "c1af43a9-5bda-409a-8f59-45ae2fbbb107",
+      "dea4b933-7392-4fe0-9fd8-842ee68e7540"
+    ];
+    
+    // We import getDoc for this
+    import('firebase/firestore').then(({ getDoc }) => {
+      legacyIds.forEach(async (id) => {
+        try {
+          const docRef = doc(db, 'analyses', id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (!data.userId) {
+              await setDoc(docRef, { userId: user.uid, userEmail: user.email }, { merge: true });
+            }
+          }
+        } catch (err) {
+          // Ignore errors, likely already migrated or unauthorized
+        }
+      });
+    });
+  }, [user]);
+
   // Sync the list of saved analyses automatically from Firestore
   useEffect(() => {
+    if (!user) {
+      setSavedItems([]);
+      return;
+    }
     const colRef = collection(db, 'analyses');
-    const unsubscribe = onSnapshot(colRef, (snapshot) => {
+    const q = query(colRef, where('userId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const items: SavedAnalysis[] = [];
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
@@ -114,7 +161,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Sync current active document if someone else edits it
   useEffect(() => {
@@ -174,6 +221,10 @@ export default function App() {
 
   const handleSave = () => {
     if (!text.trim() && arcNodes.length === 0) return;
+    if (!user) {
+      alert('Você precisa fazer login com o Google primeiro para salvar na nuvem.');
+      return;
+    }
     
     let newTitle = title;
     if (newTitle === 'Análise sem título' && text.trim()) {
@@ -192,7 +243,9 @@ export default function App() {
       propositions: JSON.stringify(propositions),
       arcNodes: JSON.stringify(arcNodes),
       aiAnalysisText: aiAnalysisText,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      userId: user.uid,
+      userEmail: user.email
     }, { merge: true }).then(() => {
       if (!currentId) {
         setCurrentId(idToSave);
@@ -369,6 +422,41 @@ export default function App() {
             <BookOpen className="w-4 h-4" />
             <span className="hidden sm:inline">Guia de Relações</span>
           </button>
+          
+          <div className="w-px h-6 bg-slate-200 mx-1 self-center"></div>
+          
+          {user ? (
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2 pr-2">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="Avatar" className="w-6 h-6 rounded-full" />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">
+                    {user.email?.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="text-xs font-medium text-slate-600">
+                  {user.displayName?.split(' ')[0] || user.email?.split('@')[0]}
+                </span>
+              </div>
+              <button 
+                onClick={logout}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-red-600 rounded-md transition-colors"
+                title="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Sair</span>
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={loginWithGoogle}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+            >
+              <LogIn className="w-4 h-4" />
+              <span className="hidden sm:inline">Entrar com Google</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -557,6 +645,8 @@ export default function App() {
         savedItems={savedItems}
         onLoad={handleLoad}
         onDelete={handleDelete}
+        user={user}
+        onLogin={loginWithGoogle}
       />
     </div>
   );

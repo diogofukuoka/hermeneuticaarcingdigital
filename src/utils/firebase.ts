@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 
 const firebaseConfig = {
   projectId: "gen-lang-client-0930791125",
@@ -12,3 +13,23 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, "ai-studio-arcingstudio-1b4468e6-520e-4ba3-ae4f-6d92fdbb6ec1");
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+
+export const loginWithGoogle = async () => {
+  try {
+    await signInWithPopup(auth, googleProvider);
+  } catch (error) {
+    console.error("Login failed", error);
+    throw error;
+  }
+};
+
+export const logout = async () => {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error("Logout failed", error);
+    throw error;
+  }
+};

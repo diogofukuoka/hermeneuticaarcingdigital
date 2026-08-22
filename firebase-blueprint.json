@@ -1,21 +1,26 @@
 {
-  "schema": [
-    {
-      "collection": "analyses",
-      "description": "Saved analyses",
-      "fields": [
-        { "name": "title", "type": "string", "description": "Reference title" },
-        { "name": "text", "type": "string", "description": "Biblical text" },
-        { "name": "strokes", "type": "string", "description": "JSON string of canvas strokes" },
-        { "name": "updatedAt", "type": "number", "description": "Timestamp of last update" }
-      ],
-      "rules": [
-        {
-          "allow": "read, write",
-          "condition": "true",
-          "description": "Public access for shared links"
-        }
-      ]
+  "entities": {
+    "Analysis": {
+      "title": "Analysis",
+      "description": "Saved text analysis",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 100 },
+        "text": { "type": "string", "maxLength": 50000 },
+        "propositions": { "type": "string", "maxLength": 100000 },
+        "arcNodes": { "type": "string", "maxLength": 100000 },
+        "aiAnalysisText": { "type": "string", "maxLength": 100000 },
+        "updatedAt": { "type": "number" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["title", "updatedAt", "userId"]
     }
-  ]
+  },
+  "firestore": {
+    "/analyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/Analysis" },
+      "description": "Saved analyses"
+    }
+  }
 }
