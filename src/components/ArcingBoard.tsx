@@ -1050,9 +1050,9 @@ export function ArcingBoard({ propositions, setPropositions, nodes, setNodes }: 
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
             </button>
           </div>
-          {nodes.length > 0 && (
+          {propositions.length > 0 && (
             <span className="text-[10px] font-bold uppercase text-indigo-600 bg-white/90 backdrop-blur shadow-sm px-3 py-1.5 rounded-lg border border-slate-200">
-              {nodes.length} Blocos
+              {propositions.length} {propositions.length === 1 ? 'Bloco' : 'Blocos'}
             </span>
           )}
       </div>

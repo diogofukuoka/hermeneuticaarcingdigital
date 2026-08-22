@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SavedAnalysis } from '../types';
-import { X, Trash2, Clock, AlertTriangle, LogIn } from 'lucide-react';
+import { X, Trash2, Clock, AlertTriangle, LogIn, Info } from 'lucide-react';
 import { User } from 'firebase/auth';
 
 interface SavedAnalysesModalProps {
@@ -24,7 +24,7 @@ export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDele
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden relative">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-bold text-slate-800">Análises Salvas</h2>
-          <button onClick={() => { setConfirmDeleteId(null); onClose(); }} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
+          <button onClick={() => { setConfirmDeleteId(null); setTooltip(null); onClose(); }} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -54,23 +54,35 @@ export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDele
               {savedItems.map(item => (
                 <div 
                   key={item.id} 
-                  onClick={() => !confirmDeleteId && onLoad(item)}
-                  onMouseMove={(e) => {
-                    if (item.text) {
-                      const formattedText = item.text.replace(/\s*(\[\d+\])/g, '\n$1').trim();
-                      setTooltip({
-                        text: formattedText,
-                        x: e.clientX,
-                        y: e.clientY
-                      });
-                    }
-                  }}
-                  onMouseLeave={() => setTooltip(null)}
+                  onClick={() => { setTooltip(null); if (!confirmDeleteId) onLoad(item); }}
                   className={`flex flex-col gap-2 p-4 rounded-lg border transition-all ${confirmDeleteId === item.id ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:border-indigo-300 hover:shadow-md group cursor-pointer'}`}
                 >
                   <div className="flex justify-between items-start gap-4">
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-bold truncate ${confirmDeleteId === item.id ? 'text-red-800' : 'text-slate-800'}`}>{item.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className={`font-bold truncate ${confirmDeleteId === item.id ? 'text-red-800' : 'text-slate-800'}`}>{item.title}</h3>
+                        {item.text && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const formattedText = item.text.replace(/\s*(\[\d+\])/g, '\n$1').trim();
+                              if (tooltip?.text === formattedText) {
+                                setTooltip(null);
+                              } else {
+                                setTooltip({
+                                  text: formattedText,
+                                  x: e.clientX,
+                                  y: e.clientY
+                                });
+                              }
+                            }}
+                            className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors shrink-0"
+                            title="Ver texto bíblico"
+                          >
+                            <Info className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <div className={`flex items-center gap-1 text-xs mt-1 ${confirmDeleteId === item.id ? 'text-red-600/70' : 'text-slate-500'}`}>
                         <Clock className="w-3 h-3" />
                         {new Date(item.updatedAt).toLocaleString()}
