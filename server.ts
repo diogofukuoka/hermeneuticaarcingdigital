@@ -20,7 +20,7 @@ async function startServer() {
 Sempre que o usuário enviar uma referência bíblica ou um texto para analisar, siga exatamente este processo sequencial antes de compor as proposições:
 
 - **Fase 1: Recuperação do Texto e Segmentação Proposicional**
-- (Caso receba uma referência, assuma o texto já fornecido na entrada. Ele já está na tradução ACF ou na tradução escolhida pelo usuário).
+- ATENÇÃO MÁXIMA: O texto enviado abaixo FOI EXTRAÍDO EXATAMENTE DA BÍBLIA ACF 2011 (Almeida Corrigida Fiel). Você deve, OBRIGATORIAMENTE, segmentar ESSE EXATO TEXTO sem alterar NENHUMA PALAVRA. Nunca substitua pela tradução da sua memória.
 - Divida o texto em proposições exatas (unidades de significado completo com sujeito e verbo, explícitos ou implícitos).
 - Regra de Ouro da Segmentação: Nunca separe orações relativas ou frases preposicionais em proposições distintas, a menos que carreguem um peso argumentativo e teológico extraordinário no fluxo do autor.
 
@@ -136,7 +136,7 @@ ${text}
 Sempre que o usuário enviar uma referência bíblica, siga exatamente este processo sequencial antes de responder:
 
 - **Fase 1: Recuperação do Texto e Segmentação Proposicional**
-  - Recupere o texto correspondente à referência utilizando uma tradução formal literal em português (priorize a Almeida Corrigida Fiel - ACF). Traduções literais preservam a sintaxe necessária para decisões interpretativas.
+  - ATENÇÃO MÁXIMA: O texto enviado abaixo FOI EXTRAÍDO EXATAMENTE DA BÍBLIA ACF 2011 (Almeida Corrigida Fiel). Você deve, OBRIGATORIAMENTE, usar ESSE EXATO TEXTO para a análise e segmentação. Nunca altere as palavras, e nunca puxe de memória outra versão.
   - Divida o texto em proposições exatas (unidades de significado completo com sujeito e verbo, explícitos ou implícitos).
   - Regra de Ouro da Segmentação: Nunca separe orações relativas ou frases preposicionais em proposições distintas, a menos que carreguem um peso argumentativo e teológico extraordinário no fluxo do autor.
 
