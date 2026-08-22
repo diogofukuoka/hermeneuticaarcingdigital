@@ -15,12 +15,13 @@ interface SavedAnalysesModalProps {
 
 export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDelete, user, onLogin }: SavedAnalysesModalProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden relative">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-bold text-slate-800">Análises Salvas</h2>
           <button onClick={() => { setConfirmDeleteId(null); onClose(); }} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
@@ -54,6 +55,17 @@ export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDele
                 <div 
                   key={item.id} 
                   onClick={() => !confirmDeleteId && onLoad(item)}
+                  onMouseMove={(e) => {
+                    if (item.text) {
+                      const formattedText = item.text.replace(/\s*(\[\d+\])/g, '\n$1').trim();
+                      setTooltip({
+                        text: formattedText,
+                        x: e.clientX,
+                        y: e.clientY
+                      });
+                    }
+                  }}
+                  onMouseLeave={() => setTooltip(null)}
                   className={`flex flex-col gap-2 p-4 rounded-lg border transition-all ${confirmDeleteId === item.id ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:border-indigo-300 hover:shadow-md group cursor-pointer'}`}
                 >
                   <div className="flex justify-between items-start gap-4">
@@ -106,6 +118,18 @@ export function SavedAnalysesModal({ isOpen, onClose, savedItems, onLoad, onDele
           )}
         </div>
       </div>
+      
+      {tooltip && (
+        <div 
+          className="fixed z-[200] max-w-sm w-max bg-slate-900 text-slate-100 text-xs p-3 rounded-lg shadow-2xl pointer-events-none border border-slate-700/50"
+          style={{ 
+            left: Math.min(tooltip.x + 16, window.innerWidth - 320), 
+            top: Math.min(tooltip.y + 16, window.innerHeight - 150) 
+          }}
+        >
+          <div className="line-clamp-[10] leading-relaxed whitespace-pre-wrap">{tooltip.text}</div>
+        </div>
+      )}
     </div>
   );
 }
