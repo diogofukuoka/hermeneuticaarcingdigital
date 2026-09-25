@@ -38,3 +38,10 @@ export const logout = async () => {
     throw error;
   }
 };
+
+export const generateAnalysisId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'ana_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 10);
+};

@@ -5,11 +5,11 @@
       "description": "Saved text analysis",
       "type": "object",
       "properties": {
-        "title": { "type": "string", "maxLength": 100 },
-        "text": { "type": "string", "maxLength": 50000 },
-        "propositions": { "type": "string", "maxLength": 100000 },
-        "arcNodes": { "type": "string", "maxLength": 100000 },
-        "aiAnalysisText": { "type": "string", "maxLength": 100000 },
+        "title": { "type": "string", "maxLength": 200 },
+        "text": { "type": "string", "maxLength": 100000 },
+        "propositions": { "type": "string", "maxLength": 500000 },
+        "arcNodes": { "type": "string", "maxLength": 500000 },
+        "aiAnalysisText": { "type": "string", "maxLength": 500000 },
         "updatedAt": { "type": "number" },
         "userId": { "type": "string", "maxLength": 128 },
         "userEmail": { "type": "string", "maxLength": 128 }

@@ -14,9 +14,9 @@ import { SavedAnalysesModal } from './components/SavedAnalysesModal';
 import { AiAnalysisPanel } from './components/AiAnalysisPanel';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
-import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut } from 'lucide-react';
+import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut, Copy, Edit2, Check, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { SavedAnalysis, ArcNodeData } from './types';
-import { db, auth, loginWithGoogle, logout } from './utils/firebase';
+import { db, auth, loginWithGoogle, logout, generateAnalysisId } from './utils/firebase';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -24,6 +24,16 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [text, setText] = useState('');
   const [title, setTitle] = useState('Análise sem título');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [tempTitle, setTempTitle] = useState('');
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => {
+      setNotification(prev => prev?.message === message ? null : prev);
+    }, 4000);
+  };
   const [propositions, setPropositions] = useState<Proposition[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -219,39 +229,86 @@ export default function App() {
     });
   };
 
-  const handleSave = () => {
-    if (!text.trim() && arcNodes.length === 0) return;
+  const handleSave = async (forceNew: boolean = false) => {
+    if (!text.trim() && arcNodes.length === 0) {
+      alert('Insira um texto bíblico ou crie arcos antes de salvar.');
+      return;
+    }
     if (!user) {
       alert('Você precisa fazer login com o Google primeiro para salvar na nuvem.');
       return;
     }
     
-    let newTitle = title;
-    if (newTitle === 'Análise sem título' && text.trim()) {
+    let newTitle = title.trim();
+    if ((!newTitle || newTitle === 'Análise sem título') && text.trim()) {
       newTitle = text.trim().split('\n')[0].substring(0, 50);
       if (newTitle.length === 50) newTitle += '...';
       setTitle(newTitle);
     }
+    if (!newTitle) newTitle = 'Análise sem título';
+    newTitle = newTitle.substring(0, 150);
 
-    const idToSave = currentId || crypto.randomUUID();
+    const isCreatingNew = forceNew || !currentId;
+    const idToSave = isCreatingNew ? generateAnalysisId() : currentId;
     
-    // Write to Firestore (creates or updates)
-    const docRef = doc(db, 'analyses', idToSave);
-    setDoc(docRef, {
-      title: newTitle,
-      text: text,
-      propositions: JSON.stringify(propositions),
-      arcNodes: JSON.stringify(arcNodes),
-      aiAnalysisText: aiAnalysisText,
-      updatedAt: Date.now(),
-      userId: user.uid,
-      userEmail: user.email
-    }, { merge: true }).then(() => {
-      if (!currentId) {
-        setCurrentId(idToSave);
-        alert('Nova análise salva com sucesso!');
-      }
-    }).catch(console.error);
+    try {
+      const docRef = doc(db, 'analyses', idToSave);
+      await setDoc(docRef, {
+        title: newTitle,
+        text: text,
+        propositions: JSON.stringify(propositions),
+        arcNodes: JSON.stringify(arcNodes),
+        aiAnalysisText: aiAnalysisText || null,
+        updatedAt: Date.now(),
+        userId: user.uid,
+        userEmail: user.email || ''
+      }, { merge: true });
+
+      setCurrentId(idToSave);
+      showNotification(
+        isCreatingNew 
+          ? '✓ Nova análise salva na nuvem com sucesso!' 
+          : '✓ Alterações salvas na nuvem!',
+        'success'
+      );
+    } catch (err: any) {
+      console.error("Save error:", err);
+      showNotification('Erro ao salvar na nuvem: ' + (err?.message || 'Erro desconhecido'), 'error');
+    }
+  };
+
+  const handleDuplicate = async (item: SavedAnalysis) => {
+    if (!user) {
+      alert('Você precisa fazer login com o Google para duplicar análises.');
+      return;
+    }
+    const newId = generateAnalysisId();
+    const newTitle = `${item.title} (Cópia)`.substring(0, 150);
+    try {
+      const docRef = doc(db, 'analyses', newId);
+      await setDoc(docRef, {
+        title: newTitle,
+        text: item.text || '',
+        propositions: item.propositions ? JSON.stringify(item.propositions) : JSON.stringify([]),
+        arcNodes: item.arcNodes ? JSON.stringify(item.arcNodes) : JSON.stringify([]),
+        aiAnalysisText: item.aiAnalysisText || null,
+        updatedAt: Date.now(),
+        userId: user.uid,
+        userEmail: user.email || ''
+      });
+      setCurrentId(newId);
+      setTitle(newTitle);
+      setText(item.text || '');
+      setArcNodes(item.arcNodes || []);
+      setPropositions(item.propositions || parseText(item.text || ''));
+      setAiAnalysisText(item.aiAnalysisText || null);
+      setShowAiPanel(!!item.aiAnalysisText);
+      setIsSavedModalOpen(false);
+      showNotification('✓ Cópia da análise salva na nuvem!', 'success');
+    } catch (err: any) {
+      console.error("Duplicate failed:", err);
+      showNotification('Erro ao duplicar análise: ' + (err?.message || ''), 'error');
+    }
   };
 
   const handleLoad = (item: SavedAnalysis) => {
@@ -279,8 +336,10 @@ export default function App() {
       if (currentId === id) {
         handleNew();
       }
+      showNotification('Análise excluída com sucesso.');
     } catch (err) {
       console.error("Failed to delete", err);
+      showNotification('Erro ao excluir análise', 'error');
     }
   };
 
@@ -304,11 +363,12 @@ export default function App() {
     
     const fetchedText = await fetchBibleText(refString);
     if (fetchedText) {
+      // Starting analysis of a new passage resets currentId so it NEVER overwrites previous analyses!
+      setCurrentId(null);
       newTitle = refString;
       setTitle(newTitle);
       textToParse = fetchedText;
       setText(fetchedText); 
-      if (currentId) updateRemote({ text: fetchedText, title: newTitle });
     } else {
       alert("Referência não encontrada. Verifique se o livro, capítulo e versículos estão corretos.");
       setIsAnalyzing(false);
@@ -335,7 +395,6 @@ export default function App() {
       parsed = parseText(textToParse);
     }
     setPropositions(parsed);
-    if (currentId) updateRemote({ text: textToParse, propositions: JSON.stringify(parsed) as any, title: newTitle });
     setIsAnalyzing(false);
     
     // Async call for Full Analysis
@@ -376,58 +435,116 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col fixed inset-0 bg-slate-50 text-slate-900 font-sans overflow-hidden">
-      <header className="h-14 border-b bg-white flex items-center justify-between px-6 shrink-0 z-50">
+    <div className="flex flex-col h-full w-full bg-slate-50 text-slate-900 font-sans overflow-hidden">
+      <header className="h-14 border-b bg-white flex items-center justify-between px-3 sm:px-6 shrink-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-lg shadow-sm flex items-center justify-center text-white ring-1 ring-indigo-900/10">
+          <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-lg shadow-sm flex items-center justify-center text-white ring-1 ring-indigo-900/10 shrink-0">
             <span className="font-serif font-bold text-[22px] leading-none drop-shadow-sm pb-0.5">ב</span>
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-slate-800 uppercase text-xs hidden md:block">
+          <h1 className="text-lg font-semibold tracking-tight text-slate-800 uppercase text-xs hidden lg:block">
             Hermenêutica Digital <span className="font-light opacity-50 ml-2">| Método Arcing</span>
           </h1>
-          {title !== 'Análise sem título' && (
-             <span className="md:ml-4 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded max-w-[200px] truncate">
-               {title}
-             </span>
+
+          {/* Editable Title Badge */}
+          {isEditingTitle ? (
+            <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-lg px-2 py-0.5">
+              <input
+                type="text"
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const final = tempTitle.trim() || 'Análise sem título';
+                    setTitle(final);
+                    setIsEditingTitle(false);
+                    if (currentId) updateRemote({ title: final });
+                  } else if (e.key === 'Escape') {
+                    setIsEditingTitle(false);
+                  }
+                }}
+                className="text-xs font-semibold text-indigo-900 bg-transparent focus:outline-none w-36 sm:w-56"
+                autoFocus
+                placeholder="Título da análise..."
+              />
+              <button
+                onClick={() => {
+                  const final = tempTitle.trim() || 'Análise sem título';
+                  setTitle(final);
+                  setIsEditingTitle(false);
+                  if (currentId) updateRemote({ title: final });
+                }}
+                className="p-0.5 text-emerald-600 hover:text-emerald-700"
+                title="Confirmar nome"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setTempTitle(title === 'Análise sem título' ? '' : title);
+                setIsEditingTitle(true);
+              }}
+              className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60 px-2.5 py-1 rounded-lg transition-colors max-w-[170px] sm:max-w-[260px] text-left group"
+              title="Clique para renomear esta análise"
+            >
+              <span className="truncate">{title}</span>
+              <Edit2 className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 shrink-0" />
+            </button>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <button 
             onClick={handleNew}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
-            title="Nova Análise"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            title="Iniciar nova análise em branco"
           >
-            <FilePlus2 className="w-4 h-4" />
+            <FilePlus2 className="w-4 h-4 text-slate-500" />
             <span className="hidden sm:inline">Nova</span>
           </button>
           <button 
-            onClick={handleSave}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors shadow-sm"
+            onClick={() => handleSave(false)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
+            title={currentId ? "Salvar alterações na análise atual" : "Salvar análise na nuvem"}
           >
             <Save className="w-4 h-4" />
-            <span className="hidden sm:inline">{currentId ? 'Salvo Auto' : 'Salvar Nuvem'}</span>
+            <span className="hidden sm:inline">{currentId ? 'Salvar' : 'Salvar Nuvem'}</span>
           </button>
+          {currentId && (
+            <button 
+              onClick={() => handleSave(true)}
+              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 text-xs sm:text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-lg transition-colors"
+              title="Salvar como uma nova análise na nuvem (mantém a anterior)"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Salvar Nova</span>
+            </button>
+          )}
           <button 
             onClick={() => setIsSavedModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            title="Ver todas as análises salvas na nuvem"
           >
-            <FolderOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">Salvos ({savedItems.length})</span>
+            <FolderOpen className="w-4 h-4 text-indigo-600" />
+            <span className="hidden sm:inline">Salvos</span>
+            <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded-full text-[11px] font-bold">
+              {savedItems.length}
+            </span>
           </button>
-          <div className="w-px h-6 bg-slate-200 mx-1 self-center"></div>
+          <div className="w-px h-6 bg-slate-200 mx-0.5 sm:mx-1 self-center"></div>
           <button 
             onClick={() => setIsGuideOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
           >
             <BookOpen className="w-4 h-4" />
-            <span className="hidden sm:inline">Guia de Relações</span>
+            <span className="hidden lg:inline">Guia</span>
           </button>
           
-          <div className="w-px h-6 bg-slate-200 mx-1 self-center"></div>
+          <div className="w-px h-6 bg-slate-200 mx-0.5 sm:mx-1 self-center"></div>
           
           {user ? (
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center gap-2 pr-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="hidden sm:flex items-center gap-2 pr-1">
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="Avatar" className="w-6 h-6 rounded-full" />
                 ) : (
@@ -435,13 +552,13 @@ export default function App() {
                     {user.email?.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <span className="text-xs font-medium text-slate-600">
+                <span className="text-xs font-medium text-slate-600 max-w-[90px] truncate">
                   {user.displayName?.split(' ')[0] || user.email?.split('@')[0]}
                 </span>
               </div>
               <button 
                 onClick={logout}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-red-600 rounded-md transition-colors"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-red-600 rounded-lg transition-colors"
                 title="Sair"
               >
                 <LogOut className="w-4 h-4" />
@@ -451,7 +568,7 @@ export default function App() {
           ) : (
             <button 
               onClick={loginWithGoogle}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
             >
               <LogIn className="w-4 h-4" />
               <span className="hidden sm:inline">Entrar com Google</span>
@@ -645,9 +762,29 @@ export default function App() {
         savedItems={savedItems}
         onLoad={handleLoad}
         onDelete={handleDelete}
+        onDuplicate={handleDuplicate}
+        onNew={handleNew}
         user={user}
         onLogin={loginWithGoogle}
       />
+
+      {/* Cloud Notification Toast */}
+      {notification && (
+        <div 
+          className={`fixed bottom-5 right-5 z-[200] px-4 py-2.5 rounded-xl shadow-2xl text-xs sm:text-sm font-medium flex items-center gap-2.5 border transition-all ${
+            notification.type === 'success' 
+              ? 'bg-slate-900 text-emerald-400 border-emerald-500/40' 
+              : 'bg-red-950 text-red-200 border-red-700/60'
+          }`}
+        >
+          {notification.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+          )}
+          <span>{notification.message}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,14 +15,14 @@ service cloud.firestore {
 
     function isValidAnalysis(data) {
       return data.keys().hasAll(['title', 'updatedAt', 'userId']) &&
-             data.title is string && data.title.size() <= 100 &&
+             data.title is string && data.title.size() <= 200 &&
              data.updatedAt is number &&
              data.userId is string && data.userId.size() <= 128 &&
              data.userId == request.auth.uid &&
-             (!('text' in data) || (data.text is string && data.text.size() <= 50000)) &&
-             (!('propositions' in data) || (data.propositions is string && data.propositions.size() <= 100000)) &&
-             (!('arcNodes' in data) || (data.arcNodes is string && data.arcNodes.size() <= 100000)) &&
-             (!('aiAnalysisText' in data) || (data.aiAnalysisText is string && data.aiAnalysisText.size() <= 100000)) &&
+             (!('text' in data) || (data.text is string && data.text.size() <= 100000)) &&
+             (!('propositions' in data) || (data.propositions is string && data.propositions.size() <= 500000)) &&
+             (!('arcNodes' in data) || (data.arcNodes is string && data.arcNodes.size() <= 500000)) &&
+             (!('aiAnalysisText' in data) || (data.aiAnalysisText is string && data.aiAnalysisText.size() <= 500000)) &&
              (!('userEmail' in data) || (data.userEmail is string && data.userEmail.size() <= 128));
     }
 
