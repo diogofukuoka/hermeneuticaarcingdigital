@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { SavedAnalysis } from '../types';
+import { isAiAnalysisMatchingText } from '../utils/analysisValidator';
 import { X, Trash2, Clock, AlertTriangle, LogIn, Info, Search, Plus, Copy, CheckCircle2, ArrowUpDown, FileText, GitBranch, Sparkles } from 'lucide-react';
 import { User } from 'firebase/auth';
 
@@ -232,10 +233,17 @@ export function SavedAnalysesModal({
                           )}
 
                           {hasAi && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded">
-                              <Sparkles className="w-2.5 h-2.5" />
-                              IA
-                            </span>
+                            isAiAnalysisMatchingText(item.aiAnalysisText, item.text || '', item.title) ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded" title="Análise Exegética IA correspondente gravada">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                IA
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded" title="Análise IA gravada pertencia a outro versículo. Ao abrir, o sistema corrigirá automaticamente.">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                IA (Ajustar)
+                              </span>
+                            )
                           )}
                         </div>
                       </div>

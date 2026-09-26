@@ -9,7 +9,9 @@ import {
   Minimize2, 
   Copy, 
   Check, 
-  Type
+  Type,
+  RotateCw,
+  BookOpen
 } from 'lucide-react';
 
 interface AiAnalysisPanelProps {
@@ -18,6 +20,8 @@ interface AiAnalysisPanelProps {
   onClose?: () => void;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
+  passageTitle?: string;
+  onRegenerate?: () => void;
 }
 
 export function AiAnalysisPanel({ 
@@ -25,12 +29,12 @@ export function AiAnalysisPanel({
   isLoading, 
   onClose, 
   isMaximized = false, 
-  onToggleMaximize 
+  onToggleMaximize,
+  passageTitle,
+  onRegenerate
 }: AiAnalysisPanelProps) {
   const [copied, setCopied] = useState(false);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
-
-  if (content === null && !isLoading) return null;
 
   const handleCopy = () => {
     if (!content) return;
@@ -68,9 +72,16 @@ export function AiAnalysisPanel({
             <Sparkles className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-semibold text-xs sm:text-sm text-indigo-950 truncate">
-              Análise Exegética IA
-            </h2>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h2 className="font-semibold text-xs sm:text-sm text-indigo-950 truncate">
+                Análise Exegética IA
+              </h2>
+              {passageTitle && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100/90 text-indigo-800 border border-indigo-200/60 truncate max-w-[160px] sm:max-w-[240px]">
+                  {passageTitle}
+                </span>
+              )}
+            </div>
             <p className="text-[10px] text-slate-500 hidden sm:block truncate">
               Segmentação proposicional, conectivos, árvore de arcos e homilética
             </p>
@@ -79,6 +90,21 @@ export function AiAnalysisPanel({
 
         {/* Toolbar Controls */}
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Regenerate / Refresh button */}
+          {onRegenerate && (
+            <button
+              onClick={onRegenerate}
+              disabled={isLoading}
+              className="flex items-center gap-1 px-2 py-1 text-slate-600 hover:text-indigo-700 hover:bg-slate-100 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+              title={`Atualizar / Regenerar Análise Exegética IA para ${passageTitle || 'esta passagem'}`}
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-600' : ''}`} />
+              <span className="text-[10px] hidden md:inline">
+                {content ? 'Atualizar IA' : 'Gerar IA'}
+              </span>
+            </button>
+          )}
+
           {content && !isLoading && (
             <>
               {/* Font size toggle */}
@@ -151,13 +177,48 @@ export function AiAnalysisPanel({
             <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-xs">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
-            <p className="text-sm font-medium text-slate-700">A IA está processando a hermenêutica do texto...</p>
-            <p className="text-xs text-slate-400 max-w-sm">
-              Identificando conectivos, relações subordinadas/coordenadas e montando a árvore de arcos.
+            <p className="text-sm font-semibold text-slate-800">
+              A IA está processando a hermenêutica {passageTitle ? `de ${passageTitle}` : 'do texto'}...
             </p>
+            <p className="text-xs text-slate-500 max-w-sm">
+              Segmentando proposições, analisando conectivos, construindo a árvore de arcos recursiva e o esboço homilético.
+            </p>
+          </div>
+        ) : !content ? (
+          <div className="flex flex-col items-center justify-center min-h-[300px] h-full text-slate-500 space-y-4 px-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+              <BookOpen className="w-7 h-7" />
+            </div>
+            <div className="max-w-md space-y-1.5">
+              <h3 className="font-bold text-base text-slate-800">
+                {passageTitle ? `Análise Exegética IA para ${passageTitle}` : 'Nenhuma Análise IA gerada para esta passagem'}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Clique no botão abaixo para gerar com o Gemini a segmentação exegética de proposições, conectivos sintáticos e a árvore de arcos com correspondência exata para esta passagem.
+              </p>
+            </div>
+            {onRegenerate && (
+              <button
+                onClick={onRegenerate}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition-all hover:shadow hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Gerar Análise Exegética IA</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className={`w-full min-w-0 break-words ${getFontSizeClass()} text-slate-800 space-y-3 max-w-none`}>
+            {passageTitle && (
+              <div className="mb-4 pb-2.5 border-b border-indigo-100 flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs font-bold text-indigo-900 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200/60">
+                  Referência: {passageTitle}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Método Arcing Hermenêutico
+                </span>
+              </div>
+            )}
             <Markdown 
               remarkPlugins={[remarkGfm]}
               components={{

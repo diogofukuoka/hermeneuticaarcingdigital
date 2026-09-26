@@ -17,6 +17,7 @@ import { fetchBibleText } from './utils/api';
 import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut, Copy, Edit2, Check, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 import { SavedAnalysis, ArcNodeData } from './types';
 import { db, auth, loginWithGoogle, logout, generateAnalysisId } from './utils/firebase';
+import { parseBibleReference, isAiAnalysisMatchingText } from './utils/analysisValidator';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -62,6 +63,7 @@ export default function App() {
     return 380;
   });
   const isDragging = React.useRef<'width' | 'height' | false>(false);
+  const activeAbortControllerRef = React.useRef<AbortController | null>(null);
 
   // Auto-adapt panel size when the window is resized
   React.useEffect(() => {
@@ -228,6 +230,11 @@ export default function App() {
             setArcNodes(JSON.parse(data.arcNodes));
           } catch (e) {}
         }
+        if (data.aiAnalysisText !== undefined) {
+          if (isAiAnalysisMatchingText(data.aiAnalysisText, data.text || text, data.title || title)) {
+            setAiAnalysisText(data.aiAnalysisText);
+          }
+        }
       }
     });
     return () => unsubscribe();
@@ -342,19 +349,116 @@ export default function App() {
     }
   };
 
+  const runAiFullAnalysis = useCallback(async (
+    textToAnalyze: string,
+    targetDocId: string | null = null,
+    passageLabel?: string
+  ) => {
+    if (!textToAnalyze || !textToAnalyze.trim()) {
+      showNotification("Texto bíblico vazio para gerar Análise IA.", "error");
+      return;
+    }
+
+    // Cancel any previous stream in progress so it NEVER bleeds into another passage!
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    activeAbortControllerRef.current = controller;
+
+    setAiAnalysisText(null);
+    setIsAnalyzingFull(true);
+    setShowAiPanel(true);
+
+    try {
+      const res = await fetch('/api/full-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToAnalyze }),
+        signal: controller.signal
+      });
+
+      if (!res.ok) {
+        throw new Error(`Falha no servidor (${res.status})`);
+      }
+      if (!res.body) throw new Error("Sem resposta do servidor.");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      setAiAnalysisText("");
+      setIsAnalyzingFull(false);
+
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (controller.signal.aborted) {
+          return;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        setAiAnalysisText(prev => (prev || "") + chunk);
+      }
+
+      if (!controller.signal.aborted) {
+        if (targetDocId) {
+          updateRemote({ aiAnalysisText: fullText }, targetDocId);
+        }
+        showNotification('✓ Análise Exegética IA concluída!', 'success');
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        return;
+      }
+      console.error("Failed to fetch full analysis:", err);
+      setAiAnalysisText("Erro ao processar análise avançada com a IA. Clique em 'Atualizar IA' para tentar novamente.");
+      setIsAnalyzingFull(false);
+      showNotification("Erro ao processar Análise Exegética IA.", "error");
+    }
+  }, [updateRemote]);
+
   const handleLoad = (item: SavedAnalysis) => {
+    // 1. Immediately abort any in-flight AI streams
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+    }
+
     setCurrentId(item.id);
     setTitle(item.title);
     setText(item.text || '');
     setArcNodes(item.arcNodes || []);
     setPropositions(item.propositions || parseText(item.text || ''));
-    if (item.aiAnalysisText) {
+
+    // 2. Synchronize the Bible selector dropdowns with the loaded passage
+    const parsed = parseBibleReference(item.title) || parseBibleReference(item.text || '');
+    if (parsed) {
+      setSelectedBook(parsed.bookName);
+      setSelectedChapter(parsed.chapter);
+      setSelectedStartVerse(parsed.startVerse);
+      setSelectedEndVerse(parsed.endVerse);
+    }
+
+    // 3. Verify that the saved AI analysis genuinely corresponds to this passage
+    const isMatching = isAiAnalysisMatchingText(item.aiAnalysisText, item.text || '', item.title);
+
+    if (item.aiAnalysisText && isMatching) {
       setAiAnalysisText(item.aiAnalysisText);
       setShowAiPanel(true);
+    } else if (item.aiAnalysisText && !isMatching) {
+      // Detected mismatch (e.g. Jo 17:26 stored inside Jo 17:11-12)
+      console.warn(`[ArcingStudio] AI analysis mismatch for "${item.title}". Correcting automatically...`);
+      setAiAnalysisText(null);
+      setShowAiPanel(true);
+      showNotification(`Passagem carregada: corrigindo e gerando Análise Exegética IA exata para ${item.title}...`, 'success');
+      if (item.text && item.text.trim()) {
+        runAiFullAnalysis(item.text, item.id, item.title);
+      }
     } else {
       setAiAnalysisText(null);
       setShowAiPanel(false);
     }
+
     setIsSavedModalOpen(false);
     setTimeout(() => {
       document.getElementById('board-section')?.scrollIntoView({ behavior: 'smooth' });
@@ -375,6 +479,9 @@ export default function App() {
   };
 
   const handleNew = () => {
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+    }
     setCurrentId(null);
     setTitle('Análise sem título');
     setText('');
@@ -382,9 +489,14 @@ export default function App() {
     setPropositions([]);
     setAiAnalysisText(null);
     setShowAiPanel(false);
+    setIsAiPanelMaximized(false);
   };
 
   const handleAnalyze = async () => {
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+    }
+
     setIsAnalyzing(true);
     
     const refString = `${selectedBook} ${selectedChapter}${selectedStartVerse ? ':' + selectedStartVerse : ''}${selectedStartVerse && selectedEndVerse && selectedEndVerse !== selectedStartVerse ? '-' + selectedEndVerse : ''}`;
@@ -428,41 +540,8 @@ export default function App() {
     setPropositions(parsed);
     setIsAnalyzing(false);
     
-    // Async call for Full Analysis
-    setAiAnalysisText(null);
-    setIsAnalyzingFull(true);
-    setShowAiPanel(true);
-    
-    fetch('/api/full-analysis', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: textToParse })
-    })
-    .then(async res => {
-      if (!res.body) throw new Error("No response body");
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      
-      setAiAnalysisText(""); // clear and get ready for chunks
-      setIsAnalyzingFull(false); // remove the loading spinner immediately
-      
-      let fullText = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          if (currentId) updateRemote({ aiAnalysisText: fullText });
-          break;
-        }
-        const chunk = decoder.decode(value, { stream: true });
-        fullText += chunk;
-        setAiAnalysisText(prev => (prev || "") + chunk);
-      }
-    })
-    .catch(err => {
-      console.error("Failed to fetch full analysis:", err);
-      setAiAnalysisText("Erro ao processar análise avançada com a IA.");
-      setIsAnalyzingFull(false);
-    });
+    // Trigger Full Analysis with proper tracking
+    runAiFullAnalysis(textToParse, null, newTitle);
   };
 
   return (
@@ -693,9 +772,17 @@ export default function App() {
             >
               {isAnalyzing ? 'Carregando...' : 'Carregar e Analisar'}
             </button>
-            {(aiAnalysisText || isAnalyzingFull) && (
+            {(propositions.length > 0 || text.trim().length > 0 || aiAnalysisText || isAnalyzingFull) && (
               <button
-                onClick={() => setShowAiPanel(prev => !prev)}
+                onClick={() => {
+                  setShowAiPanel(prev => {
+                    const next = !prev;
+                    if (next && !aiAnalysisText && !isAnalyzingFull && text.trim()) {
+                      runAiFullAnalysis(text, currentId, title);
+                    }
+                    return next;
+                  });
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium transition-colors shadow-sm flex-1 sm:flex-none justify-center whitespace-nowrap border ${
                   showAiPanel 
                     ? 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-indigo-200' 
@@ -809,6 +896,8 @@ export default function App() {
                   }}
                   isMaximized={isAiPanelMaximized}
                   onToggleMaximize={() => setIsAiPanelMaximized(prev => !prev)}
+                  passageTitle={title !== 'Análise sem título' ? title : undefined}
+                  onRegenerate={() => runAiFullAnalysis(text, currentId, title)}
                 />
               </div>
             </div>
