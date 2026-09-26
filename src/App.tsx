@@ -14,7 +14,7 @@ import { SavedAnalysesModal } from './components/SavedAnalysesModal';
 import { AiAnalysisPanel } from './components/AiAnalysisPanel';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
-import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut, Copy, Edit2, Check, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut, Copy, Edit2, Check, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 import { SavedAnalysis, ArcNodeData } from './types';
 import { db, auth, loginWithGoogle, logout, generateAnalysisId } from './utils/firebase';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, query, where } from 'firebase/firestore';
@@ -48,9 +48,36 @@ export default function App() {
   const [aiAnalysisText, setAiAnalysisText] = useState<string | null>(null);
   const [isAnalyzingFull, setIsAnalyzingFull] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
-  const [aiPanelWidth, setAiPanelWidth] = useState(850);
-  const [aiPanelHeight, setAiPanelHeight] = useState(400);
+  const [isAiPanelMaximized, setIsAiPanelMaximized] = useState(false);
+  const [aiPanelWidth, setAiPanelWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return Math.min(800, Math.max(380, Math.round(window.innerWidth * 0.52)));
+    }
+    return 650;
+  });
+  const [aiPanelHeight, setAiPanelHeight] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return Math.min(480, Math.max(260, Math.round(window.innerHeight * 0.45)));
+    }
+    return 380;
+  });
   const isDragging = React.useRef<'width' | 'height' | false>(false);
+
+  // Auto-adapt panel size when the window is resized
+  React.useEffect(() => {
+    const handleWindowResize = () => {
+      setAiPanelWidth(prev => {
+        const maxAllowed = Math.max(320, window.innerWidth - 60);
+        return Math.min(prev, maxAllowed);
+      });
+      setAiPanelHeight(prev => {
+        const maxAllowed = Math.max(180, window.innerHeight - 120);
+        return Math.min(prev, maxAllowed);
+      });
+    };
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, []);
 
   React.useEffect(() => {
     const handleMove = (e: MouseEvent | TouchEvent) => {
@@ -62,12 +89,16 @@ export default function App() {
       
       if (isDragging.current === 'width') {
         const newWidth = window.innerWidth - clientX;
-        if (newWidth > 350 && newWidth < window.innerWidth - 100) {
+        const minWidth = 320;
+        const maxWidth = Math.max(minWidth, window.innerWidth - 60);
+        if (newWidth >= minWidth && newWidth <= maxWidth) {
           setAiPanelWidth(newWidth);
         }
       } else if (isDragging.current === 'height') {
         const newHeight = window.innerHeight - clientY;
-        if (newHeight > 200 && newHeight < window.innerHeight - 150) {
+        const minHeight = 180;
+        const maxHeight = Math.max(minHeight, window.innerHeight - 110);
+        if (newHeight >= minHeight && newHeight <= maxHeight) {
           setAiPanelHeight(newHeight);
         }
       }
@@ -654,7 +685,7 @@ export default function App() {
             </div>
           </div>
           
-          <div className="flex gap-2 w-full sm:w-auto shrink-0">
+          <div className="flex gap-2 w-full sm:w-auto shrink-0 flex-wrap items-center">
             <button
               onClick={handleAnalyze}
               disabled={isAnalyzing || !selectedChapter}
@@ -662,6 +693,20 @@ export default function App() {
             >
               {isAnalyzing ? 'Carregando...' : 'Carregar e Analisar'}
             </button>
+            {(aiAnalysisText || isAnalyzingFull) && (
+              <button
+                onClick={() => setShowAiPanel(prev => !prev)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg font-medium transition-colors shadow-sm flex-1 sm:flex-none justify-center whitespace-nowrap border ${
+                  showAiPanel 
+                    ? 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-indigo-200' 
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600'
+                }`}
+                title={showAiPanel ? "Ocultar painel de Análise Exegética IA" : "Exibir painel de Análise Exegética IA"}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{showAiPanel ? 'Ocultar Análise IA' : 'Ver Análise IA'}</span>
+              </button>
+            )}
             {propositions.length > 0 && (
               <button
                 onClick={() => {
@@ -673,6 +718,7 @@ export default function App() {
                   setSelectedStartVerse('');
                   setSelectedEndVerse('');
                   setShowAiPanel(false);
+                  setIsAiPanelMaximized(false);
                   setAiAnalysisText(null);
                 }}
                 className="bg-white border border-slate-200 text-slate-600 px-4 py-1.5 text-sm rounded-lg font-medium hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm flex-1 sm:flex-none flex items-center justify-center whitespace-nowrap"
@@ -685,57 +731,84 @@ export default function App() {
 
         {/* Board Section */}
         <div id="board-section" className="flex-1 flex flex-col lg:flex-row min-h-0 bg-slate-50 relative overflow-hidden">
-          <div className="flex-1 flex flex-col min-h-0 relative">
+          <div className={`flex-1 flex flex-col min-h-0 relative ${isAiPanelMaximized && showAiPanel ? 'hidden' : 'flex'}`}>
             <ErrorBoundary>
               <ArcingBoard propositions={propositions} setPropositions={handleSetPropositions} nodes={arcNodes} setNodes={handleSetArcNodes} />
             </ErrorBoundary>
           </div>
-          {showAiPanel && (propositions.length > 0 || isAnalyzingFull) && (
+          {showAiPanel && (propositions.length > 0 || isAnalyzingFull || aiAnalysisText) && (
             <div 
-              className="ai-panel-dynamic w-full border-t lg:border-t-0 lg:border-l border-slate-200 bg-white shrink-0 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-40 relative flex flex-col"
-              style={{ '--ai-panel-w': `${aiPanelWidth}px`, '--ai-panel-h': `${aiPanelHeight}px` } as React.CSSProperties}
+              className={`ai-panel-dynamic w-full border-t lg:border-t-0 lg:border-l border-slate-200 bg-white shrink-0 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-40 relative flex flex-col ${
+                isAiPanelMaximized ? '!w-full !max-w-full !h-full !max-h-full !flex-1' : ''
+              }`}
+              style={!isAiPanelMaximized ? ({ '--ai-panel-w': `${aiPanelWidth}px`, '--ai-panel-h': `${aiPanelHeight}px` } as React.CSSProperties) : undefined}
             >
               <style>{ `
                 @media (min-width: 1024px) { 
-                  .ai-panel-dynamic { width: var(--ai-panel-w) !important; max-width: var(--ai-panel-w) !important; flex: 0 0 var(--ai-panel-w) !important; height: 100%; } 
+                  .ai-panel-dynamic:not(.\\!w-full) { 
+                    width: min(var(--ai-panel-w), calc(100vw - 60px)) !important; 
+                    max-width: calc(100vw - 60px) !important; 
+                    flex: 0 0 min(var(--ai-panel-w), calc(100vw - 60px)) !important; 
+                    height: 100%; 
+                  } 
                 }
                 @media (max-width: 1023px) { 
-                  .ai-panel-dynamic { height: var(--ai-panel-h) !important; max-height: var(--ai-panel-h) !important; flex: 0 0 var(--ai-panel-h) !important; width: 100%; } 
+                  .ai-panel-dynamic:not(.\\!h-full) { 
+                    height: min(var(--ai-panel-h), calc(100vh - 120px)) !important; 
+                    max-height: calc(100vh - 120px) !important; 
+                    flex: 0 0 min(var(--ai-panel-h), calc(100vh - 120px)) !important; 
+                    width: 100%; 
+                  } 
                 }
               ` }</style>
               <div className="flex-1 h-full flex flex-col w-full min-w-0">
-                {/* Desktop Drag Handle (Width) */}
-                <div 
-                  className="hidden lg:block absolute left-0 top-0 bottom-0 w-4 -ml-2 cursor-col-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    isDragging.current = 'width';
-                    document.body.style.cursor = 'col-resize';
-                    document.body.style.userSelect = 'none';
-                  }}
-                  onTouchStart={(e) => {
-                    isDragging.current = 'width';
-                    document.body.style.userSelect = 'none';
-                  }}
-                />
-                {/* Mobile/Tablet Drag Handle (Height) */}
-                <div 
-                  className="lg:hidden absolute left-0 right-0 top-0 h-4 -mt-2 cursor-row-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    isDragging.current = 'height';
-                    document.body.style.cursor = 'row-resize';
-                    document.body.style.userSelect = 'none';
-                  }}
-                  onTouchStart={(e) => {
-                    isDragging.current = 'height';
-                    document.body.style.userSelect = 'none';
-                  }}
-                />
+                {!isAiPanelMaximized && (
+                  <>
+                    {/* Desktop Drag Handle (Width) */}
+                    <div 
+                      className="hidden lg:block absolute left-0 top-0 bottom-0 w-3 -ml-1.5 cursor-col-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50 group"
+                      title="Arraste para ajustar a largura da análise"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        isDragging.current = 'width';
+                        document.body.style.cursor = 'col-resize';
+                        document.body.style.userSelect = 'none';
+                      }}
+                      onTouchStart={(e) => {
+                        isDragging.current = 'width';
+                        document.body.style.userSelect = 'none';
+                      }}
+                    >
+                      <div className="w-0.5 h-8 bg-slate-300 rounded group-hover:bg-indigo-500 absolute top-1/2 -translate-y-1/2 left-1 transition-colors" />
+                    </div>
+                    {/* Mobile/Tablet Drag Handle (Height) */}
+                    <div 
+                      className="lg:hidden absolute left-0 right-0 top-0 h-4 -mt-2 cursor-row-resize hover:bg-indigo-500/20 active:bg-indigo-500/40 transition-colors z-50 flex items-center justify-center group"
+                      title="Arraste para ajustar a altura da análise"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        isDragging.current = 'height';
+                        document.body.style.cursor = 'row-resize';
+                        document.body.style.userSelect = 'none';
+                      }}
+                      onTouchStart={(e) => {
+                        isDragging.current = 'height';
+                        document.body.style.userSelect = 'none';
+                      }}
+                    >
+                      <div className="w-12 h-1 bg-slate-300 rounded group-hover:bg-indigo-500 transition-colors" />
+                    </div>
+                  </>
+                )}
                 <AiAnalysisPanel 
                   content={aiAnalysisText} 
                   isLoading={isAnalyzingFull} 
-                  onClose={() => setShowAiPanel(false)}
+                  onClose={() => {
+                    setShowAiPanel(false);
+                    setIsAiPanelMaximized(false);
+                  }}
+                  isMaximized={isAiPanelMaximized}
+                  onToggleMaximize={() => setIsAiPanelMaximized(prev => !prev)}
                 />
               </div>
             </div>
