@@ -4,7 +4,14 @@ import { GoogleGenAI } from "@google/genai";
 const app = express();
 app.use(express.json());
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    },
+  },
+});
 
 app.post("/api/parse", async (req, res) => {
     try {
@@ -90,11 +97,10 @@ ${text}
 `;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
+        model: 'gemini-4-hydrogen',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
-          temperature: 0.2
         }
       });
 
@@ -209,7 +215,7 @@ ${text}
       res.setHeader('Transfer-Encoding', 'chunked');
 
       const responseStream = await ai.models.generateContentStream({
-        model: 'gemini-3.1-flash-lite',
+        model: 'gemini-4-hydrogen',
         contents: prompt,
       });
 
