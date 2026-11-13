@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SavedAnalysis } from '../types';
 import { isAiAnalysisMatchingText } from '../utils/analysisValidator';
-import { X, Trash2, Clock, AlertTriangle, LogIn, Info, Search, Plus, Copy, CheckCircle2, ArrowUpDown, FileText, GitBranch, Sparkles } from 'lucide-react';
+import { X, Trash2, Clock, AlertTriangle, LogIn, Info, Search, Plus, Copy, CheckCircle2, ArrowUpDown, FileText, GitBranch, Sparkles, KeyRound } from 'lucide-react';
 import { User } from 'firebase/auth';
 
 interface SavedAnalysesModalProps {
@@ -14,6 +14,7 @@ interface SavedAnalysesModalProps {
   onNew?: () => void;
   user: User | null;
   onLogin: () => void;
+  onOpenKeyLogin?: () => void;
 }
 
 export function SavedAnalysesModal({ 
@@ -25,7 +26,8 @@ export function SavedAnalysesModal({
   onDuplicate,
   onNew,
   user, 
-  onLogin 
+  onLogin,
+  onOpenKeyLogin,
 }: SavedAnalysesModalProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -139,13 +141,27 @@ export function SavedAnalysesModal({
               <p className="mb-6 max-w-sm text-sm text-slate-500">
                 Você precisa estar conectado com sua conta Google para salvar e sincronizar infinitas análises de versículos na nuvem.
               </p>
-              <button 
-                onClick={onLogin}
-                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-sm text-sm"
-              >
-                <LogIn className="w-5 h-5" />
-                Entrar com Google
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button 
+                  onClick={onLogin}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-sm text-sm"
+                >
+                  <LogIn className="w-5 h-5" />
+                  Entrar com Google
+                </button>
+                {onOpenKeyLogin && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onOpenKeyLogin();
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors text-sm"
+                  >
+                    <KeyRound className="w-4 h-4 text-indigo-600" />
+                    Entrar via Chave (Trabalho)
+                  </button>
+                )}
+              </div>
             </div>
           ) : savedItems.length === 0 ? (
             <div className="text-center py-12 text-slate-400 flex flex-col items-center">

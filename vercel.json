@@ -6,6 +6,10 @@
       "dest": "/api/index.ts"
     },
     {
+      "src": "/__/auth/(.*)",
+      "dest": "https://gen-lang-client-0930791125.firebaseapp.com/__/auth/$1"
+    },
+    {
       "handle": "filesystem"
     },
     {

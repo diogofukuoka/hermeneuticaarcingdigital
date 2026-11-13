@@ -14,9 +14,22 @@ import { SavedAnalysesModal } from './components/SavedAnalysesModal';
 import { AiAnalysisPanel } from './components/AiAnalysisPanel';
 import { Proposition, parseText } from './utils/parser';
 import { fetchBibleText } from './utils/api';
-import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut, Copy, Edit2, Check, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
+import { BookOpen, Save, FolderOpen, FilePlus2, LogIn, LogOut, Copy, Edit2, Check, CheckCircle2, AlertTriangle, Sparkles, KeyRound } from 'lucide-react';
 import { SavedAnalysis, ArcNodeData } from './types';
-import { db, auth, loginWithGoogle, logout, generateAnalysisId } from './utils/firebase';
+import {
+  db,
+  auth,
+  loginWithGoogle,
+  logout,
+  generateAnalysisId,
+  checkRedirectLogin,
+  AuthDiagnosticError,
+  isLocalAuthProxyAvailable,
+  restoreSessionFromKey,
+  LoginMode,
+} from './utils/firebase';
+import { LoginHelpModal } from './components/LoginHelpModal';
+import { SessionTransferModal } from './components/SessionTransferModal';
 import { parseBibleReference, isAiAnalysisMatchingText } from './utils/analysisValidator';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -35,10 +48,70 @@ export default function App() {
       setNotification(prev => prev?.message === message ? null : prev);
     }, 4000);
   };
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginHelp, setLoginHelp] = useState<{
+    isOpen: boolean;
+    errorCode: string;
+    errorMessage?: string;
+    proxyAvailable: boolean;
+  }>({
+    isOpen: false,
+    errorCode: '',
+    proxyAvailable: false,
+  });
+
+  const handleLogin = useCallback(async (mode: LoginMode = 'auto') => {
+    setIsLoggingIn(true);
+    try {
+      await loginWithGoogle(mode);
+      setLoginHelp(prev => ({ ...prev, isOpen: false }));
+    } catch (err: any) {
+      if (err instanceof AuthDiagnosticError) {
+        setLoginHelp({
+          isOpen: true,
+          errorCode: err.code,
+          errorMessage: err.message,
+          proxyAvailable: err.proxyAvailable,
+        });
+      } else {
+        const code = err?.code || 'auth/unknown';
+        if (
+          code === 'auth/unauthorized-domain' ||
+          code === 'auth/network-request-failed' ||
+          code === 'auth/internal-error'
+        ) {
+          const proxyAvailable = await isLocalAuthProxyAvailable();
+          setLoginHelp({
+            isOpen: true,
+            errorCode: code,
+            errorMessage: err?.message,
+            proxyAvailable,
+          });
+        } else if (code === 'auth/popup-closed-by-user') {
+          showNotification('Janela de login fechada. Clique em "Entrar com Google" para tentar novamente.', 'error');
+        } else if (code !== 'auth/cancelled-popup-request') {
+          showNotification('Erro ao entrar com Google: ' + (err?.message || 'Tente novamente'), 'error');
+        }
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, []);
+
   const [propositions, setPropositions] = useState<Proposition[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isSavedModalOpen, setIsSavedModalOpen] = useState(false);
+  const [isSessionTransferOpen, setIsSessionTransferOpen] = useState(false);
+
+  const openManualKeyLogin = useCallback(async () => {
+    const proxyAvailable = await isLocalAuthProxyAvailable();
+    setLoginHelp({
+      isOpen: true,
+      errorCode: 'manual-key',
+      proxyAvailable,
+    });
+  }, []);
   const [arcNodes, setArcNodes] = useState<ArcNodeData[]>([]);
   const [selectedBook, setSelectedBook] = useState('Gênesis');
   const [selectedChapter, setSelectedChapter] = useState('1');
@@ -134,12 +207,63 @@ export default function App() {
   const maxVerses = 176; // Psalm 119 has 176 verses
 
 
-  // Listen for auth state changes
+  // Listen for auth state changes, complete redirect login, or restore #session= link
   useEffect(() => {
+    const processSessionHash = () => {
+      if (typeof window !== 'undefined' && window.location.hash.includes('session=')) {
+        const rawHash = window.location.hash;
+        // Immediately strip session token from address bar for security
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        const params = new URLSearchParams(rawHash.replace(/^#/, ''));
+        const sessionToken = params.get('session');
+        if (sessionToken) {
+          restoreSessionFromKey(sessionToken)
+            .then((info) => {
+              showNotification(`Conectado como ${info.displayName}!`);
+            })
+            .catch(async (err: any) => {
+              const proxyAvailable = await isLocalAuthProxyAvailable();
+              setLoginHelp({
+                isOpen: true,
+                errorCode: 'manual-key',
+                errorMessage: err?.message,
+                proxyAvailable,
+              });
+              showNotification(err?.message || 'Não foi possível restaurar o link de sessão.', 'error');
+            });
+        }
+      }
+    };
+
+    processSessionHash();
+    window.addEventListener('hashchange', processSessionHash);
+
+    checkRedirectLogin()
+      .then((redirectUser) => {
+        if (redirectUser) {
+          showNotification(`Bem-vindo, ${redirectUser.displayName?.split(' ')[0] || redirectUser.email}!`);
+        }
+      })
+      .catch(async (err: any) => {
+        const proxyAvailable = await isLocalAuthProxyAvailable();
+        setLoginHelp({
+          isOpen: true,
+          errorCode: err?.code || 'auth/redirect-failed',
+          errorMessage: err?.message,
+          proxyAvailable,
+        });
+      });
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        setLoginHelp(prev => (prev.isOpen ? { ...prev, isOpen: false } : prev));
+      }
     });
-    return () => unsubscribe();
+    return () => {
+      window.removeEventListener('hashchange', processSessionHash);
+      unsubscribe();
+    };
   }, []);
 
   // Migrate legacy saved items that don't have a userId
@@ -666,6 +790,14 @@ export default function App() {
                   {user.displayName?.split(' ')[0] || user.email?.split('@')[0]}
                 </span>
               </div>
+              <button
+                onClick={() => setIsSessionTransferOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/70 rounded-lg transition-colors"
+                title="Gerar link ou chave para entrar no navegador do trabalho"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Conectar Trabalho</span>
+              </button>
               <button 
                 onClick={logout}
                 className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-red-600 rounded-lg transition-colors"
@@ -676,13 +808,24 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <button 
-              onClick={loginWithGoogle}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
-            >
-              <LogIn className="w-4 h-4" />
-              <span className="hidden sm:inline">Entrar com Google</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button 
+                onClick={() => handleLogin('auto')}
+                disabled={isLoggingIn}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-60"
+              >
+                <LogIn className="w-4 h-4" />
+                <span className="hidden sm:inline">{isLoggingIn ? 'Entrando...' : 'Entrar com Google'}</span>
+              </button>
+              <button
+                onClick={openManualKeyLogin}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                title="Entrar em navegador gerenciado (trabalho) usando Chave ou Link do celular"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden md:inline">Chave</span>
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -927,7 +1070,23 @@ export default function App() {
         onDuplicate={handleDuplicate}
         onNew={handleNew}
         user={user}
-        onLogin={loginWithGoogle}
+        onLogin={() => handleLogin('auto')}
+        onOpenKeyLogin={openManualKeyLogin}
+      />
+      <LoginHelpModal
+        isOpen={loginHelp.isOpen}
+        onClose={() => setLoginHelp(prev => ({ ...prev, isOpen: false }))}
+        errorCode={loginHelp.errorCode}
+        errorMessage={loginHelp.errorMessage}
+        proxyAvailable={loginHelp.proxyAvailable}
+        isLoggingIn={isLoggingIn}
+        onRetry={(mode) => handleLogin(mode)}
+        onSessionRestored={(info) => showNotification(`Conectado como ${info.displayName}!`)}
+      />
+      <SessionTransferModal
+        isOpen={isSessionTransferOpen}
+        onClose={() => setIsSessionTransferOpen(false)}
+        user={user}
       />
 
       {/* Cloud Notification Toast */}
